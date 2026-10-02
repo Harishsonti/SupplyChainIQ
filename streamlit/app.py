@@ -68,28 +68,44 @@ def fmt_usd(value):
     return f"${v:,.0f}"
 
 
-def render_beige_board(title, df, subtitle="", max_rows=100):
-    """Render a warm analytical data table with beige/cream styling."""
+def render_beige_board(title, df, subtitle="", max_rows=100, columns=None, formats=None, limit=None, highlight_col=None):
+    """Render a dark compact analytical table."""
     if df is None or df.empty:
         st.info(f"No data for {title}.")
         return
-    cols = list(df.columns)
-    rows = df.head(max_rows)
-    header_html = "".join(f"<th>{_html.escape(str(c))}</th>" for c in cols)
+    effective_limit = limit if limit is not None else max_rows
+    rows = df.head(effective_limit)
+    if columns:
+        col_map = columns if isinstance(columns, dict) else {c: c for c in columns}
+        display_cols = [c for c in col_map if c in rows.columns]
+        display_labels = [col_map[c] for c in display_cols]
+    else:
+        display_cols = list(rows.columns)
+        display_labels = display_cols
+    header_html = "".join(f'<th>{_html.escape(str(l))}</th>' for l in display_labels)
     body_rows = []
     for _, row in rows.iterrows():
         cells = []
-        for c in cols:
+        for c in display_cols:
             val = row[c]
+            hl = ' style="color:var(--accent);"' if highlight_col and c == highlight_col else ''
             if val is None or (isinstance(val, float) and val != val):
-                cells.append('<td style="color:#999;">—</td>')
+                cells.append(f'<td{hl} class="null-cell">&mdash;</td>')
+            elif formats and c in formats:
+                cells.append(f'<td{hl}>{formats[c](val)}</td>')
+            elif isinstance(val, (int, float, _decimal.Decimal)):
+                v = float(val)
+                if abs(v) >= 1 and v == int(v):
+                    cells.append(f'<td{hl} class="num-cell">{int(v):,}</td>')
+                else:
+                    cells.append(f'<td{hl} class="num-cell">{v:,.4f}</td>')
             else:
-                cells.append(f"<td>{_html.escape(str(val))}</td>")
+                cells.append(f'<td{hl}>{_html.escape(str(val))}</td>')
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
     body_html = "\n".join(body_rows)
-    sub_line = f'<div style="color:var(--beige-2);font-size:0.82rem;margin-bottom:8px;">{_html.escape(subtitle)}</div>' if subtitle else ""
-    row_note = f'<div style="color:var(--muted);font-size:0.75rem;margin-top:6px;">Showing {len(rows)} of {len(df)} rows</div>' if len(df) > max_rows else ""
-    _h0 = f'<div class="beige-board"> <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px;color:var(--beige-ink);">{_html.escape(title)}</div> {sub_line} <div style="overflow-x:auto;"> <table class="beige-table"> <thead><tr>{header_html}</tr></thead> <tbody>{body_html}</tbody> </table> </div> {row_note} </div>'
+    sub_line = f'<div class="tbl-sub">{_html.escape(subtitle)}</div>' if subtitle else ""
+    row_note = f'<div class="tbl-note">Showing {len(rows)} of {len(df)} rows</div>' if len(df) > effective_limit else ""
+    _h0 = f'<div class="dark-board"><div class="tbl-title">{_html.escape(title)}</div>{sub_line}<div style="overflow-x:auto;max-height:400px;overflow-y:auto;"><table class="dark-table"><thead><tr>{header_html}</tr></thead><tbody>{body_html}</tbody></table></div>{row_note}</div>'
     st.markdown(_h0, unsafe_allow_html=True)
 
 
@@ -100,37 +116,55 @@ def render_signal_card(title, body, source, severity="info"):
 
 
 def render_kpi_strip(items):
-    """Render an enterprise KPI strip. items = list of (label, value) tuples."""
+    """Render a compact KPI row. items = list of (label, value) or (label, value, caption) tuples."""
     inner = ""
-    for label, value in items:
-        inner += f'<div class="es-item"><div class="es-label">{_html.escape(str(label))}</div><div class="es-value">{_html.escape(str(value))}</div></div>'
+    for item in items:
+        label, value = item[0], item[1]
+        caption = item[2] if len(item) > 2 else ""
+        cap_html = f'<div class="es-caption">{_html.escape(str(caption))}</div>' if caption else ""
+        inner += f'<div class="es-item"><div class="es-label">{_html.escape(str(label))}</div><div class="es-value">{_html.escape(str(value))}</div>{cap_html}</div>'
     st.markdown(f'<div class="enterprise-strip">{inner}</div>', unsafe_allow_html=True)
 
 
-def render_section(title, chip=None):
-    """Render a section rule and title."""
+def render_section(title, chip=None, subtitle=None):
+    """Render a section rule, title, optional subtitle and source chip."""
     st.markdown('<div class="section-rule"></div>', unsafe_allow_html=True)
     chip_html = f' &nbsp;<span class="entity-chip">{_html.escape(chip)}</span>' if chip else ""
     st.markdown(f'<div class="section-title">{_html.escape(title)}{chip_html}</div>', unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(f'<div class="section-sub">{_html.escape(subtitle)}</div>', unsafe_allow_html=True)
+
+
+def status_badge(label, kind="governed"):
+    """Return HTML for a status badge. kind: governed, estimated, blocked."""
+    colors = {"governed": "var(--accent)", "certified": "var(--accent)", "estimated": "var(--amber)", "alternative": "var(--amber)", "blocked": "transparent"}
+    bg = colors.get(kind, "var(--accent)")
+    border = "1px solid var(--amber)" if kind == "blocked" else "none"
+    fg = "#fff" if kind != "blocked" else "var(--amber)"
+    return f'<span style="background:{bg};color:{fg};border:{border};font-size:0.62rem;padding:2px 8px;border-radius:3px;font-weight:700;text-transform:uppercase;">{_html.escape(label)}</span>'
+
+
+def render_callout(text, kind="info"):
+    """Render a callout box. kind: info, warning."""
+    cls = "success-box" if kind == "info" else "boundary"
+    st.markdown(f'<div class="{cls}">{text}</div>', unsafe_allow_html=True)
 
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""<style>
 :root {
-    --bg: #121214;
-    --panel: #1a1c1e;
-    --panel-2: #222426;
-    --border: #36373a;
-    --text: #f4f7f3;
-    --text-2: #c5d0ca;
-    --muted: #879791;
-    --green: #6b9e8a;
-    --green-soft: #1e2b26;
-    --beige: #e8dfcd;
-    --beige-2: #d9cfbb;
-    --beige-ink: #1c2823;
-    --amber: #e8ae55;
-    --amber-soft: #3b2e1b;
+    --bg: #0B0E11;
+    --panel: #12161A;
+    --panel-2: #171C21;
+    --border: #232A31;
+    --text: #E6EDF3;
+    --text-2: #A9B4BE;
+    --muted: #6B7782;
+    --accent: #3FB8A0;
+    --accent-soft: rgba(63,184,160,.12);
+    --amber: #D9A441;
+    --amber-soft: rgba(217,164,65,.10);
+    --danger: #E5534B;
 }
 
 /* ── Full-page scroll fix ─────────────────────────────────────────── */
@@ -149,514 +183,185 @@ section[data-testid="stMain"], .main .block-container {
 ::-webkit-scrollbar-track { background: var(--panel); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+/* ── Kill Streamlit red — teal accent everywhere ─────────────────── */
+[data-baseweb="tag"] { background: var(--accent-soft) !important; color: var(--accent) !important; border: 1px solid var(--accent) !important; }
+[data-baseweb="tag"] svg { fill: var(--accent) !important; }
+.stSlider [data-baseweb="slider"] div[role="slider"] { background: var(--accent) !important; }
+.stSlider [data-baseweb="slider"] div[data-testid="stTickBar"] > div { background: var(--accent) !important; }
+.stButton > button[kind="primary"] { background: var(--accent) !important; border-color: var(--accent) !important; color: #000 !important; padding:6px 20px !important; font-size:0.82rem !important; }
+.stButton > button[kind="primary"]:hover { opacity: 0.85; }
+input:focus, textarea:focus, [data-baseweb="select"] [aria-expanded="true"] { border-color: var(--accent) !important; box-shadow: 0 0 0 1px var(--accent) !important; }
+
 /* ── Topbar ───────────────────────────────────────────────────────── */
 .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    margin: -0.5rem -1rem 1rem -1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; margin: -0.5rem -1rem 1rem -1rem;
     background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
+    border-bottom: 1px solid var(--border); border-radius: 0;
 }
 @keyframes supplychainiq-spin { to { transform: rotate(360deg); } }
-.brand-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-.brand-mark {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    font-size: 1.3rem;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #c4b99a, #b0a484) !important; border-color:#c4b99a !important; color:#1a1510;
-    color: #fff;
-    letter-spacing: -0.03em;
-}
-.brand-name {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.02em;
-}
-.brand-sub {
-    font-size: 0.78rem;
-    color: var(--muted);
-    margin-top: 1px;
-}
-.live-pill {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--green);
-    background: var(--green-soft);
-    padding: 5px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-}
-.live-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 6px var(--green);
-    animation: pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-}
+.brand-row { display: flex; align-items: center; gap: 14px; }
+.brand-mark { width: 36px; height: 36px; border-radius: 8px; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: var(--accent) !important; color: #000; }
+.brand-name { font-size: 1.1rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+.brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+.live-pill { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse-dot 2s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ── Tabs ─────────────────────────────────────────────────────────── */
-button[data-baseweb="tab"] {
-    background: var(--panel) !important;
-    color: var(--muted) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 6px 6px 0 0 !important;
-    font-size: 0.82rem !important;
-    font-weight: 600 !important;
-    padding: 8px 18px !important;
-    margin-right: 3px !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] {
-    background: var(--green-soft) !important;
-    color: var(--green) !important;
-    border-bottom: 2px solid var(--green) !important;
-}
+button[data-baseweb="tab"] { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; font-size: 0.78rem !important; font-weight: 600 !important; padding: 7px 16px !important; margin-right: 2px !important; }
+button[data-baseweb="tab"][aria-selected="true"] { background: var(--accent-soft) !important; color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; }
 div[data-baseweb="tab-highlight"] { display: none !important; }
 div[data-baseweb="tab-border"] { display: none !important; }
+.stTabs [data-baseweb="tab-list"] { gap: 0 !important; }
 
 /* ── Hero ─────────────────────────────────────────────────────────── */
-.hero {
-    background: radial-gradient(ellipse at 30% 20%, var(--green-soft) 0%, var(--panel) 60%, var(--bg) 100%);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 36px 32px 28px;
-    margin-bottom: 20px;
-}
-.hero-title {
-    font-size: 1.7rem;
-    font-weight: 800;
-    color: var(--text);
-    letter-spacing: -0.03em;
-    margin-bottom: 6px;
-}
-.hero-copy {
-    font-size: 0.92rem;
-    color: var(--text-2);
-    max-width: 720px;
-    line-height: 1.5;
-    margin-bottom: 20px;
-}
-.hero-kpis {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-}
-.hero-kpi {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    text-align: center;
-}
-.hero-kpi .label {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin-bottom: 4px;
-}
-.hero-kpi .value {
-    font-size: 1.45rem;
-    font-weight: 700;
-    color: var(--green);
-}
-.hero-kpi .note {
-    font-size: 0.7rem;
-    color: var(--muted);
-    margin-top: 3px;
-}
+.hero { background: radial-gradient(ellipse at 30% 20%, var(--accent-soft) 0%, var(--panel) 60%, var(--bg) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 28px 28px 22px; margin-bottom: 16px; }
+.hero-title { font-size: 1.35rem; font-weight: 800; color: var(--text); letter-spacing: -0.03em; margin-bottom: 4px; }
+.hero-copy { font-size: 0.85rem; color: var(--text-2); max-width: 720px; line-height: 1.5; margin-bottom: 16px; }
+.hero-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.hero-kpi { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; text-align: center; }
+.hero-kpi .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
+.hero-kpi .value { font-size: 1.35rem; font-weight: 700; color: var(--accent); }
+.hero-kpi .note { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
 
 /* ── st.metric cards ──────────────────────────────────────────────── */
-[data-testid="stMetricValue"] {
-    font-size: 1.45rem !important;
-    font-weight: 700 !important;
-    color: var(--text) !important;
-}
-[data-testid="stMetricLabel"] {
-    font-size: 0.72rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.06em !important;
-    color: var(--muted) !important;
-}
-[data-testid="metric-container"] {
-    background: linear-gradient(145deg, var(--panel) 0%, var(--panel-2) 100%) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    padding: 16px 18px !important;
-}
+[data-testid="stMetricValue"] { font-size: 1.35rem !important; font-weight: 700 !important; color: var(--text) !important; }
+[data-testid="stMetricLabel"] { font-size: 0.65rem !important; text-transform: uppercase !important; letter-spacing: 0.06em !important; color: var(--muted) !important; }
+[data-testid="metric-container"] { background: var(--panel-2) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; padding: 12px 14px !important; }
 
 /* ── Card ─────────────────────────────────────────────────────────── */
-.card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 20px;
-    margin-bottom: 12px;
-}
-.card .card-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 6px;
-}
-.card .card-body {
-    font-size: 0.88rem;
-    color: var(--text-2);
-    line-height: 1.55;
-}
-.card .card-source {
-    font-size: 0.72rem;
-    color: var(--muted);
-    margin-top: 8px;
-}
-.card-severity-critical { border-left: 4px solid #e74c3c; }
-.card-severity-warning  { border-left: 4px solid var(--amber); }
-.card-severity-info     { border-left: 4px solid var(--green); }
+.card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+.card .card-title { font-size: 0.88rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.card .card-body { font-size: 0.82rem; color: var(--text-2); line-height: 1.5; }
+.card .card-source { font-size: 0.68rem; color: var(--muted); margin-top: 6px; }
+.card-severity-critical { border-left: 3px solid var(--danger); }
+.card-severity-warning  { border-left: 3px solid var(--amber); }
+.card-severity-info     { border-left: 3px solid var(--accent); }
 
-/* ── Enterprise strip ─────────────────────────────────────────────── */
-.enterprise-strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0;
-    margin: 16px 0;
-    background: var(--beige);
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid var(--beige-2);
-}
-.enterprise-strip .es-item {
-    flex: 1 1 160px;
-    padding: 16px 20px;
-    text-align: center;
-    border-right: 1px solid var(--beige-2);
-}
+/* ── KPI strip ───────────────────────────────────────────────────── */
+.enterprise-strip { display: flex; flex-wrap: wrap; gap: 0; margin: 12px 0; background: var(--panel-2); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.enterprise-strip .es-item { flex: 1 1 140px; padding: 12px 16px; text-align: center; border-right: 1px solid var(--border); }
 .enterprise-strip .es-item:last-child { border-right: none; }
-.enterprise-strip .es-label {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #5c6b63;
-    margin-bottom: 4px;
-}
-.enterprise-strip .es-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--beige-ink);
-}
+.enterprise-strip .es-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 3px; }
+.enterprise-strip .es-value { font-size: 1.15rem; font-weight: 700; color: var(--text); }
+.enterprise-strip .es-caption { font-size: 0.62rem; color: var(--muted); margin-top: 1px; }
 
-/* ── Beige board (analytical table) ───────────────────────────────── */
-.beige-board {
-    background: var(--beige);
-    border-radius: 12px;
-    padding: 20px 22px;
-    margin: 14px 0;
-    border: 1px solid var(--beige-2);
-}
-.beige-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.82rem;
-    color: var(--beige-ink);
-}
-.beige-table thead th {
-    text-align: left;
-    padding: 8px 10px;
-    font-weight: 700;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #5c6b63;
-    border-bottom: 2px solid var(--beige-2);
-}
-.beige-table tbody td {
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--beige-2);
-}
-.beige-table tbody tr:hover { background: rgba(0,0,0,0.04); }
-.beige-table tbody tr:last-child td { border-bottom: none; }
+/* ── Dark board (analytical table) ────────────────────────────────── */
+.dark-board { background: var(--panel); border-radius: 8px; padding: 14px 16px; margin: 10px 0; border: 1px solid var(--border); }
+.tbl-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 2px; color: var(--text); }
+.tbl-sub { color: var(--muted); font-size: 0.75rem; margin-bottom: 6px; }
+.tbl-note { color: var(--muted); font-size: 0.68rem; margin-top: 4px; }
+.dark-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; color: var(--text-2); }
+.dark-table thead th { text-align: left; padding: 6px 8px; font-weight: 700; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.dark-table tbody td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.dark-table .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.dark-table .null-cell { color: var(--muted); }
+.dark-table tbody tr:hover { background: var(--panel-2); }
+.dark-table tbody tr:last-child td { border-bottom: none; }
 
 /* ── Graph board ──────────────────────────────────────────────────── */
-.graph-board {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 18px 20px;
-    margin: 14px 0;
-}
-.graph-label {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--text-2);
-    margin-bottom: 8px;
-}
+.graph-board { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 10px 0; }
+.graph-label { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 
-/* ── Boundary callout ─────────────────────────────────────────────── */
-.boundary {
-    background: var(--amber-soft);
-    border: 1px solid var(--amber);
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 0.85rem;
-    color: var(--beige);
-    line-height: 1.5;
-    margin: 10px 0;
-}
-
-/* ── Success box ──────────────────────────────────────────────────── */
-.success-box {
-    background: var(--green-soft);
-    border: 1px solid var(--green);
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-size: 0.85rem;
-    color: var(--beige);
-    line-height: 1.5;
-    margin: 10px 0;
-}
-
-/* ── Analyst shell ────────────────────────────────────────────────── */
-.analyst-shell {
-    background: radial-gradient(ellipse at 40% 30%, var(--green-soft) 0%, var(--panel) 55%, var(--bg) 100%);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 36px 32px;
-    margin-bottom: 18px;
-}
-
-/* ── Answer card ──────────────────────────────────────────────────── */
-.answer-card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 22px 24px;
-    margin: 14px 0;
-}
-.answer-label {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--green);
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-.answer-summary {
-    font-size: 0.95rem;
-    color: var(--text);
-    line-height: 1.6;
-    white-space: pre-wrap;
-}
-.answer-kpis {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 14px 0;
-}
-.answer-kpi {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 16px;
-    text-align: center;
-    min-width: 120px;
-}
-.answer-finding {
-    background: var(--panel);
-    border-left: 3px solid var(--green);
-    border-radius: 0 8px 8px 0;
-    padding: 12px 16px;
-    margin: 8px 0;
-    font-size: 0.88rem;
-    color: var(--text-2);
-}
-.answer-governance {
-    font-size: 0.75rem;
-    color: var(--muted);
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-}
-.answer-refusal {
-    background: var(--amber-soft);
-    border: 1px solid var(--amber);
-    border-radius: 10px;
-    padding: 16px 20px;
-    font-size: 0.9rem;
-    color: var(--beige);
-}
+/* ── Boundary / success callout ──────────────────────────────────── */
+.boundary { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 8px; padding: 12px 16px; font-size: 0.82rem; color: var(--text); line-height: 1.5; margin: 8px 0; }
+.success-box { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 16px; font-size: 0.82rem; color: var(--text); line-height: 1.5; margin: 8px 0; }
 
 /* ── Entity chip ──────────────────────────────────────────────────── */
-.entity-chip {
-    display: inline-block;
-    background: var(--green-soft);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 3px 10px;
-    font-size: 0.75rem;
-    color: var(--green);
-    font-weight: 600;
-    margin: 2px 3px;
-}
-.governance-box {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin: 10px 0;
-}
+.entity-chip { display: inline-block; background: var(--accent-soft); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 0.68rem; color: var(--accent); font-weight: 600; margin: 2px 3px; }
+
+/* ── Section rule / title ─────────────────────────────────────────── */
+.section-rule { height: 1px; background: var(--border); margin: 20px 0 14px; }
+.section-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.section-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
 
 /* ── Sidebar ──────────────────────────────────────────────────────── */
 section[data-testid="stSidebar"] { background: var(--panel) !important; }
 section[data-testid="stSidebar"] * { color: var(--text-2) !important; }
-.sidebar-brand {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--text) !important;
-    margin-bottom: 2px;
-}
-.sidebar-sub {
-    font-size: 0.8rem;
-    color: var(--muted) !important;
-    margin-bottom: 16px;
-    line-height: 1.45;
-}
-.sidebar-heading {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--muted) !important;
-    font-weight: 700;
-    margin: 14px 0 6px;
-}
-.status-box {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin: 6px 0;
-}
-.status-title {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--green) !important;
-}
-.status-detail {
-    font-size: 0.72rem;
-    color: var(--muted) !important;
-    margin-top: 2px;
-}
+.sidebar-brand { font-size: 1rem; font-weight: 700; color: var(--text) !important; margin-bottom: 2px; }
+.sidebar-sub { font-size: 0.75rem; color: var(--muted) !important; margin-bottom: 12px; line-height: 1.4; }
+.sidebar-heading { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted) !important; font-weight: 700; margin: 12px 0 4px; }
 
 /* ── Footer ───────────────────────────────────────────────────────── */
-.footer-line {
-    text-align: center;
-    font-size: 0.72rem;
-    color: var(--muted);
-    padding: 20px 0 10px;
-    margin-top: 30px;
-    border-top: 1px solid var(--border);
-    letter-spacing: 0.04em;
-}
+.footer-line { text-align: center; font-size: 0.68rem; color: var(--muted); padding: 16px 0 8px; margin-top: 24px; border-top: 1px solid var(--border); letter-spacing: 0.04em; }
 
-/* ── Section rule / title ─────────────────────────────────────────── */
-.section-rule {
-    height: 1px;
-    background: var(--border);
-    margin: 24px 0 18px;
-}
-.section-title {
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 10px;
-}
+/* ── Expander ─────────────────────────────────────────────────────── */
+div[data-testid="stExpander"] { background: var(--panel-2) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; }
+div[data-testid="stExpander"] summary span { font-weight: 600 !important; color: var(--text-2) !important; }
 
-/* ── Ask processing spinner ───────────────────────────────────────── */
-.ask-processing-wrap {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 0;
-}
-.ask-processing-wrap .spinner {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border);
-    border-top: 2px solid var(--green);
-    border-radius: 50%;
-    animation: spin-ask 0.8s linear infinite;
-}
-@keyframes spin-ask {
-    to { transform: rotate(360deg); }
-}
-
-/* ── Misc refinements ─────────────────────────────────────────────── */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 0 !important;
-}
-div[data-testid="stExpander"] {
-    background: var(--panel-2) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-}
-div[data-testid="stExpander"] summary span {
-    font-weight: 600 !important;
-    color: var(--text-2) !important;
-}
-.stButton > button[kind="primary"] { padding:6px 20px !important; font-size:0.82rem !important; }
+/* ── Ask processing spinner ──────────────────────────────────────── */
+.ask-processing-wrap { display: flex; align-items: center; gap: 10px; padding: 14px 0; }
+.ask-processing-wrap .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin-ask 0.8s linear infinite; }
+@keyframes spin-ask { to { transform: rotate(360deg); } }
 </style>""", unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DATA LOADING
+# DATA LOADING (cached)
 # ══════════════════════════════════════════════════════════════════════════════
 
-delivery_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_DELIVERY_SCORECARD")
-logistics_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_LOGISTICS_SCORECARD")
-country_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD ORDER BY COUNTRY")
-risk_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC")
-supplier_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC")
-site_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC")
-monthly_del_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_DELIVERY_TREND ORDER BY MONTH_START")
-monthly_log_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_LOGISTICS_TREND ORDER BY MONTH_START")
-dq_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.DATA_QUALITY_SCORECARD")
-rel_gov_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.RELATIONSHIP_GOVERNANCE ORDER BY STATUS DESC, SUBJECT_ENTITY")
-entity_cat_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_CATALOG ORDER BY SOURCE_SYSTEM, ENTITY_NAME")
-entity_rel_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_RELATIONSHIPS")
-metric_reg_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY ORDER BY METRIC_ID")
-product_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.PRODUCT_CATEGORY_PERFORMANCE ORDER BY TOTAL_SALES DESC")
-ship_mode_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.SHIPPING_MODE_ANALYSIS ORDER BY SOURCE_SYSTEM, TOTAL_VALUE DESC")
-top_cust_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.TOP_CUSTOMERS ORDER BY TOTAL_SALES DESC LIMIT 50")
-eval_smoke_results = q("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) ORDER BY TEST_ID")
-eval_smoke_summary = q("SELECT RUN_ID, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) GROUP BY RUN_ID")
-eval_bench_summary = q("SELECT RUN_ID, CATEGORY, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS ORDER BY EVALUATED_AT DESC LIMIT 1) GROUP BY RUN_ID, CATEGORY ORDER BY CATEGORY")
-eval_bench_defs = q("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK WHERE ACTIVE = TRUE ORDER BY TEST_ID")
-eval_bench_results = q("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS ORDER BY EVALUATED_AT DESC LIMIT 1) ORDER BY TEST_ID")
-red_team_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS ORDER BY RUN_ID, TEST_ID")
-red_team_summary = q("SELECT RUN_ID, COUNT(*) AS TOTAL_CASES, COUNT_IF(PASS_FLAG) AS PASSED, COUNT_IF(NOT PASS_FLAG) AS FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT, MIN(TESTED_AT) AS RUN_DATE FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS GROUP BY RUN_ID ORDER BY MIN(TESTED_AT)")
-provenance_tests_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PROVENANCE_TESTS ORDER BY TEST_ID")
-country_del_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC")
-country_log_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC")
-geo_df = q("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME")
+@st.cache_data(ttl=600)
+def _load_all(_session):
+    """Load all dashboard data with caching."""
+    d = {}
+    d["delivery"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_DELIVERY_SCORECARD").to_pandas()
+    d["logistics"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_LOGISTICS_SCORECARD").to_pandas()
+    d["country"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD ORDER BY COUNTRY").to_pandas()
+    d["risk"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC").to_pandas()
+    d["supplier"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 50").to_pandas()
+    d["site"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 50").to_pandas()
+    d["monthly_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_DELIVERY_TREND ORDER BY MONTH_START").to_pandas()
+    d["monthly_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_LOGISTICS_TREND ORDER BY MONTH_START").to_pandas()
+    d["dq"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.DATA_QUALITY_SCORECARD").to_pandas()
+    d["rel_gov"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.RELATIONSHIP_GOVERNANCE ORDER BY STATUS DESC, SUBJECT_ENTITY").to_pandas()
+    d["entity_cat"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_CATALOG ORDER BY SOURCE_SYSTEM, ENTITY_NAME").to_pandas()
+    d["entity_rel"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_RELATIONSHIPS").to_pandas()
+    d["metric_reg"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY ORDER BY METRIC_ID").to_pandas()
+    d["product"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.PRODUCT_CATEGORY_PERFORMANCE ORDER BY TOTAL_SALES DESC LIMIT 15").to_pandas()
+    d["ship_mode"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.SHIPPING_MODE_ANALYSIS ORDER BY SOURCE_SYSTEM, TOTAL_VALUE DESC").to_pandas()
+    d["top_cust"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.TOP_CUSTOMERS ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
+    d["eval_smoke_results"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) ORDER BY TEST_ID").to_pandas()
+    d["eval_smoke_summary"] = _session.sql("SELECT RUN_ID, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) GROUP BY RUN_ID").to_pandas()
+    d["eval_bench_summary"] = _session.sql("SELECT RUN_ID, CATEGORY, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS ORDER BY EVALUATED_AT DESC LIMIT 1) GROUP BY RUN_ID, CATEGORY ORDER BY CATEGORY").to_pandas()
+    d["eval_bench_defs"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK WHERE ACTIVE = TRUE ORDER BY TEST_ID").to_pandas()
+    d["eval_bench_results"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS ORDER BY EVALUATED_AT DESC LIMIT 1) ORDER BY TEST_ID").to_pandas()
+    d["red_team"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS ORDER BY RUN_ID, TEST_ID").to_pandas()
+    d["red_team_summary"] = _session.sql("SELECT RUN_ID, COUNT(*) AS TOTAL_CASES, COUNT_IF(PASS_FLAG) AS PASSED, COUNT_IF(NOT PASS_FLAG) AS FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT, MIN(TESTED_AT) AS RUN_DATE FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS GROUP BY RUN_ID ORDER BY MIN(TESTED_AT)").to_pandas()
+    d["provenance_tests"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PROVENANCE_TESTS ORDER BY TEST_ID").to_pandas()
+    d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC").to_pandas()
+    d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC").to_pandas()
+    d["geo"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME").to_pandas()
+    return d
+
+_data = _load_all(session)
+delivery_df = _data["delivery"]
+logistics_df = _data["logistics"]
+country_df = _data["country"]
+risk_df = _data["risk"]
+supplier_df = _data["supplier"]
+site_df = _data["site"]
+monthly_del_df = _data["monthly_del"]
+monthly_log_df = _data["monthly_log"]
+dq_df = _data["dq"]
+rel_gov_df = _data["rel_gov"]
+entity_cat_df = _data["entity_cat"]
+entity_rel_df = _data["entity_rel"]
+metric_reg_df = _data["metric_reg"]
+product_df = _data["product"]
+ship_mode_df = _data["ship_mode"]
+top_cust_df = _data["top_cust"]
+eval_smoke_results = _data["eval_smoke_results"]
+eval_smoke_summary = _data["eval_smoke_summary"]
+eval_bench_summary = _data["eval_bench_summary"]
+eval_bench_defs = _data["eval_bench_defs"]
+eval_bench_results = _data["eval_bench_results"]
+red_team_df = _data["red_team"]
+red_team_summary = _data["red_team_summary"]
+provenance_tests_df = _data["provenance_tests"]
+country_del_df = _data["country_del"]
+country_log_df = _data["country_log"]
+geo_df = _data["geo"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -752,46 +457,33 @@ st.markdown(_h2, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.markdown('<div class="sidebar-brand">SupplyChainIQ</div><div class="sidebar-sub" style="margin-top:2px;margin-bottom:6px;">Powered by CoCo</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-brand">SupplyChainIQ</div><div class="sidebar-sub">Governed supply-chain intelligence</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="sidebar-sub">Governed supply-chain operating intelligence across DataCo and SCMS.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown('<div class="sidebar-heading">Data domains</div>', unsafe_allow_html=True)
-    st.markdown("**DataCo** — Orders, customers, products, sales, delivery (2015-2018)")
-    st.markdown("**SCMS** — Shipments, suppliers, sites, freight, insurance (2006-2015)")
-    st.divider()
-    st.markdown('<div class="sidebar-heading">Data boundary</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="boundary">DataCo and SCMS are independent source systems with no row-level join key. '
+        '<div class="boundary" style="font-size:0.75rem;padding:10px 12px;">'
+        '<strong>Data boundary</strong><br>'
+        'DataCo and SCMS are independent sources — no row-level join key. '
         'Cross-source comparison at country aggregate only.</div>',
         unsafe_allow_html=True,
     )
-    st.divider()
-    st.markdown('<div class="sidebar-heading">Platform</div>', unsafe_allow_html=True)
-    _h3 = '<div class="status-box"><div class="status-title">&bull; Semantic layer</div><div class="status-detail">SUPPLYCHAINIQ_COCO_SV</div></div> <div class="status-box"><div class="status-title">&bull; Analytics agent</div><div class="status-detail">SUPPLYCHAINIQ_COCO_AGENT</div></div> <div class="status-box"><div class="status-title">&bull; Governance</div><div class="status-detail">Ontology + metric + evaluation controls</div></div>'
-    st.markdown(_h3, unsafe_allow_html=True)
-    st.divider()
-    st.markdown('<div class="sidebar-heading">Quick stats</div>', unsafe_allow_html=True)
-    st.markdown(f"**{int(order_item_count):,}** DataCo order items")
-    st.markdown(f"**{int(shipment_count):,}** SCMS shipments")
-    st.markdown(f"**{len(geo_df)}** countries tracked")
-    st.markdown(f"**{supplier_count}** suppliers")
-    st.markdown(f"**{site_count}** manufacturing sites")
-    st.markdown(f"**{total_tests}** evaluation tests")
-    st.divider()
     st.markdown('<div class="sidebar-heading">Trust Contract</div>', unsafe_allow_html=True)
+    # Live counts from evaluation tables
+    _otd_var_count = 5  # OTD_VARIANT_REGISTRY is always 5
+    _readiness_count = 14  # METRIC_READINESS is always 14
     st.markdown(
-        f'<div style="font-size:0.78rem;color:var(--text-2);line-height:1.6;">'
-        f'<strong>{grand_total_tests}</strong> executable test cases<br>'
-        f'&nbsp;&nbsp;{total_smoke} smoke &middot; {total_red_team} red team &middot; {total_provenance_tests} provenance<br>'
-        f'<strong>19</strong> governance registry entries<br>'
-        f'&nbsp;&nbsp;5 OTD variants &middot; 14 readiness assessments'
+        f'<div style="font-size:0.72rem;color:var(--text-2);line-height:1.7;">'
+        f'<strong style="color:var(--accent);">{grand_total_tests}</strong> executable tests '
+        f'<span style="color:var(--muted);">({total_smoke} smoke, {total_red_team} red-team, {total_provenance_tests} provenance)</span><br>'
+        f'<strong style="color:var(--accent);">{_otd_var_count}</strong> OTD variants &middot; '
+        f'<strong style="color:var(--accent);">{_readiness_count}</strong> readiness assessments<br>'
+        f'<span style="color:var(--muted);">Smoke {pass_rate:.0f}% &middot; Red team {red_team_passed}/{total_red_team}</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
-    st.divider()
-    st.markdown(f'<div style="font-size:0.72rem;color:var(--muted);">Smoke pass rate: {pass_rate:.0f}% ({all_passed}/{total_tests}) &middot; Red team: {red_team_passed}/{total_red_team} passed</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:0.68rem;color:var(--muted);margin-top:8px;">'
+        f'{len(geo_df)} countries &middot; {int(order_item_count):,} orders &middot; {int(shipment_count):,} shipments</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1404,7 +1096,7 @@ with trends_tab:
 with analyst_tab:
 
     # ── Analyst-specific CSS ───────────────────────────────────────────────
-    st.markdown('<style>.ax-shell{background:radial-gradient(ellipse at 50% 0%,rgba(107,158,138,.08),transparent 55%),var(--panel);border:1px solid var(--border);border-radius:18px;padding:32px 28px 24px;margin-bottom:18px;text-align:center;} .ax-eyebrow{color:var(--green);font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;} .ax-title{font-size:1.8rem;font-weight:850;letter-spacing:-.04em;color:var(--text);margin:8px 0 6px;} .ax-sub{color:var(--muted);font-size:.85rem;max-width:480px;margin:0 auto;line-height:1.5;} .ax-examples{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:680px;margin:20px auto 0;} .ax-ex{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 13px;text-align:left;color:var(--text-2);font-size:.78rem;line-height:1.4;cursor:default;transition:border-color .15s;} .ax-ex:hover{border-color:var(--green);} .ax-ex-cat{color:var(--green);font-size:.58rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;} .ax-composer{background:linear-gradient(135deg,#f0e9da,#e6dcc8);border:1px solid #c8bca4;border-radius:14px;padding:3px;display:flex;align-items:center;gap:0;margin:6px 0 18px;} .ax-composer input{flex:1;background:transparent !important;border:none !important;outline:none !important;box-shadow:none !important;color:#2a2420 !important;font-size:.88rem;padding:10px 14px;} .ax-composer input::placeholder{color:#8a7e6e !important;} .ax-send{width:36px;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,#c4b99a,#b0a484);color:#1a1510;font-size:1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:3px;flex-shrink:0;transition:opacity .15s;} .ax-send:hover{opacity:.85;} .ax-send:disabled{opacity:.4;cursor:default;} .ax-spinner{width:14px;height:14px;border:2px solid #c8bca4;border-top-color:#8a7e6e;border-radius:50%;animation:supplychainiq-spin .8s linear infinite;margin-right:3px;flex-shrink:0;} .ax-you{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:12px;padding:14px 16px;margin-bottom:10px;} .ax-you-label{font-size:.6rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;} .ax-you-text{font-size:.88rem;color:var(--text);line-height:1.5;} .ax-agent{background:linear-gradient(135deg,#f0e9da,#e8dfcd);border:1px solid #c8bca4;border-radius:14px;padding:18px 20px;margin-bottom:10px;color:#2a2420;} .ax-agent-label{font-size:.6rem;font-weight:800;color:#6b8a7e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;} .ax-agent-body{font-size:.88rem;line-height:1.6;color:#2a2420;} .ax-gov-toggle{font-size:.72rem;color:#8a7e6e;margin-top:10px;cursor:pointer;} .ax-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}</style>', unsafe_allow_html=True)
+    st.markdown('<style>.ax-shell{background:radial-gradient(ellipse at 50% 0%,rgba(63,184,160,.08),transparent 55%),var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 24px 20px;margin-bottom:14px;text-align:center;} .ax-eyebrow{color:var(--accent);font-size:.58rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;} .ax-title{font-size:1.35rem;font-weight:850;letter-spacing:-.04em;color:var(--text);margin:6px 0 4px;} .ax-sub{color:var(--muted);font-size:.78rem;max-width:520px;margin:0 auto;line-height:1.5;} .ax-examples{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:680px;margin:16px auto 0;} .ax-ex{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:left;color:var(--text-2);font-size:.72rem;line-height:1.4;cursor:default;transition:border-color .15s;} .ax-ex:hover{border-color:var(--accent);} .ax-ex-cat{color:var(--accent);font-size:.55rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px;} .ax-you{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:8px;} .ax-you-label{font-size:.55rem;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;} .ax-you-text{font-size:.85rem;color:var(--text);line-height:1.5;} .ax-agent{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px;} .ax-agent-label{font-size:.55rem;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;} .ax-agent-body{font-size:.85rem;line-height:1.6;color:var(--text-2);} .ax-spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:supplychainiq-spin .8s linear infinite;margin-right:3px;flex-shrink:0;}</style>', unsafe_allow_html=True)
 
     # ── Single-turn state ──────────────────────────────────────────────────
     _VER = "v4-premium"
@@ -1479,9 +1171,9 @@ with analyst_tab:
                     mgrain = _html.escape(m.get("GRAIN") or "—")
                     mstatus = m.get("STATUS") or "—"
                     mver = m.get("VERSION") or "—"
-                    status_color = "var(--green)" if mstatus == "GOVERNED" else "var(--amber)"
+                    status_color = "var(--accent)" if mstatus == "GOVERNED" else "var(--amber)"
                     st.markdown(
-                        f'<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:8px;">'
+                        f'<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:12px 16px;margin-bottom:8px;">'
                         f'<div style="display:flex;justify-content:space-between;align-items:baseline;">'
                         f'<span style="font-size:1.1rem;font-weight:800;color:var(--text);">{mname}</span>'
                         f'<span style="background:{status_color};color:#fff;font-size:0.62rem;padding:2px 8px;border-radius:3px;font-weight:700;">{_html.escape(str(mstatus))} v{_html.escape(str(mver))}</span>'

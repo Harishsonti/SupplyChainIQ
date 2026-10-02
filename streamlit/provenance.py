@@ -83,10 +83,70 @@ def parse_agent_response(raw_json):
 # ── Metric Identification ────────────────────────────────────────────────────
 
 def _normalize_sql(s):
-    """Collapse whitespace and lowercase for fuzzy SQL matching."""
+    """Normalize SQL for matching: lowercase, strip quotes/qualifiers, collapse whitespace."""
     if not s:
         return ""
-    return re.sub(r"\s+", " ", s.lower()).strip()
+    s = s.lower()
+    s = s.replace('"', '')
+    # Strip fully-qualified references: db.schema.table.col → col
+    s = re.sub(r'\b\w+\.\w+\.\w+\.(\w+)\b', r'\1', s)
+    # Strip schema.table.col → col
+    s = re.sub(r'\b\w+\.\w+\.(\w+)\b', r'\1', s)
+    # Strip table.col → col (but only for known table patterns)
+    for tbl in ('order_item_fact', 'scms_shipment_fact', 'customer_dim',
+                'product_dim', 'supplier_dim', 'manufacturing_site_dim',
+                'geography_dim', 'calendar_dim'):
+        s = re.sub(r'\b' + tbl + r'\.(\w+)', r'\1', s)
+    # Strip alias.col patterns like t1.col
+    s = re.sub(r'\b[a-z]\d*\.(\w+)', r'\1', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
+# Column signatures for each governed metric — the distinctive columns that
+# uniquely identify each metric when found together with the right aggregate.
+_METRIC_SIGNATURES = {
+    "OTD_PCT": {
+        "columns": {"delivery_status"},
+        "indicators": {"advance shipping", "shipping on time"},
+        "aggregate": "count",
+    },
+    "DELAY_RATE_PCT": {
+        "columns": {"delivery_status"},
+        "indicators": {"late delivery"},
+        "aggregate": "count",
+    },
+    "AVG_DELAY_DAYS": {
+        "columns": {"days_for_shipping_real", "days_for_shipment_scheduled"},
+        "indicators": set(),
+        "aggregate": "avg",
+    },
+    "TOTAL_SALES": {
+        "columns": {"sales"},
+        "indicators": set(),
+        "aggregate": "sum",
+    },
+    "TOTAL_PROFIT": {
+        "columns": {"order_profit_per_order"},
+        "indicators": set(),
+        "aggregate": "sum",
+    },
+    "PROFIT_MARGIN_PCT": {
+        "columns": {"order_profit_per_order", "sales"},
+        "indicators": set(),
+        "aggregate": "sum",
+    },
+    "TOTAL_FREIGHT": {
+        "columns": {"freight_cost_usd"},
+        "indicators": set(),
+        "aggregate": "sum",
+    },
+    "LOGISTICS_RATE_PCT": {
+        "columns": {"freight_cost_usd", "line_item_value"},
+        "indicators": set(),
+        "aggregate": "sum",
+    },
+}
 
 
 @st.cache_data(ttl=600)
@@ -142,10 +202,16 @@ _NON_COMPUTABLE_KEYWORDS = [
 def identify_metrics(prov, session):
     """Match provenance SQL against METRIC_REGISTRY.
 
+    Resolution order:
+    1. SQL expression fragment match (handles quotes/qualifiers)
+    2. Column+aggregate signature match
+    3. Metric name/ID in answer text (fallback)
+
     Returns list of dicts with metric info + resolution_method.
     """
     registry = _load_metric_registry(session)
-    sql_norm = _normalize_sql(prov.get("physical_sql") or prov.get("logical_sql") or "")
+    raw_sql = prov.get("physical_sql") or prov.get("logical_sql") or ""
+    sql_norm = _normalize_sql(raw_sql)
     answer_text = (prov.get("text") or "").lower()
 
     # Check for non-computable / refusal
@@ -177,43 +243,48 @@ def identify_metrics(prov, session):
 
     matched = []
 
-    # Phase 1: SQL pattern match
+    # Strategy 1: SQL expression match (normalized — strips quotes/qualifiers)
     for m in registry:
         expr_norm = _normalize_sql(m.get("SQL_EXPRESSION", ""))
         if not expr_norm:
             continue
-        # Check if the core expression appears in the generated SQL
-        # Normalize common SQL variations
-        expr_tokens = expr_norm.replace("(", " ( ").replace(")", " ) ").split()
-        sql_tokens_str = sql_norm.replace("(", " ( ").replace(")", " ) ")
-        # Simple containment check on key fragments
-        key_fragments = []
-        if "count_if" in expr_norm:
-            # Extract the COUNT_IF conditions
-            for frag in re.findall(r"count_if\s*\([^)]+\)", expr_norm):
-                key_fragments.append(frag)
-        elif "sum(" in expr_norm:
-            for frag in re.findall(r"sum\s*\([^)]+\)", expr_norm):
-                key_fragments.append(frag)
-        elif "avg(" in expr_norm:
-            for frag in re.findall(r"avg\s*\([^)]+\)", expr_norm):
-                key_fragments.append(frag)
-
-        if key_fragments and all(f in sql_tokens_str for f in key_fragments):
-            matched.append({**m, "resolution_method": "SQL_PARSED"})
+        # Extract aggregate fragments robustly (handle nested parens)
+        frags = _extract_aggregate_fragments(expr_norm)
+        if frags and all(_fragment_in_sql(f, sql_norm) for f in frags):
+            matched.append({**m, "resolution_method": "SQL_EXPRESSION_MATCH"})
             continue
+        # Full expression containment
+        if expr_norm in sql_norm:
+            matched.append({**m, "resolution_method": "SQL_EXPRESSION_MATCH"})
 
-        # Broader check: if the expression's aggregate functions appear
-        if expr_norm in sql_tokens_str:
-            matched.append({**m, "resolution_method": "SQL_PARSED"})
+    # Strategy 2: Column+aggregate signature match
+    if not matched:
+        for m in registry:
+            mid = m.get("METRIC_ID", "")
+            sig = _METRIC_SIGNATURES.get(mid)
+            if not sig:
+                continue
+            cols = sig["columns"]
+            indicators = sig["indicators"]
+            agg = sig["aggregate"]
+            # All distinctive columns must appear in the SQL
+            if not all(re.search(r'\b' + re.escape(c) + r'\b', sql_norm) for c in cols):
+                continue
+            # The aggregate function must appear
+            if agg not in sql_norm:
+                continue
+            # All indicator strings must appear (e.g., 'advance shipping')
+            if indicators and not all(ind in sql_norm for ind in indicators):
+                continue
+            matched.append({**m, "resolution_method": "COLUMN_SIGNATURE_MATCH"})
 
-    # Phase 2: Fallback — metric name in answer text
+    # Strategy 3: Metric name in answer text (last resort)
     if not matched:
         for m in registry:
             mname = (m.get("METRIC_NAME") or "").lower()
             mid = (m.get("METRIC_ID") or "").lower().replace("_", " ")
             if mname and (mname in answer_text or mid in answer_text):
-                matched.append({**m, "resolution_method": "FALLBACK"})
+                matched.append({**m, "resolution_method": "ANSWER_TEXT_FALLBACK"})
 
     if not matched:
         return [{
@@ -229,6 +300,52 @@ def identify_metrics(prov, session):
         }]
 
     return matched
+
+
+def _extract_aggregate_fragments(expr):
+    """Extract aggregate function calls from a SQL expression, handling nested parens."""
+    frags = []
+    for agg in ('count_if', 'count', 'sum', 'avg', 'min', 'max'):
+        for m in re.finditer(agg + r'\s*\(', expr):
+            start = m.start()
+            depth = 0
+            end = start
+            for i in range(m.end() - 1, len(expr)):
+                if expr[i] == '(':
+                    depth += 1
+                elif expr[i] == ')':
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end > start:
+                frags.append(expr[start:end])
+    return frags
+
+
+def _fragment_in_sql(fragment, sql):
+    """Check if an aggregate fragment's semantic content appears in the SQL.
+    Handles COUNT(CASE WHEN ... THEN 1 END) as equivalent to COUNT_IF(...)."""
+    if fragment in sql:
+        return True
+    # Extract the inner condition from count_if(condition)
+    m = re.match(r'count_if\s*\((.+)\)$', fragment, re.DOTALL)
+    if m:
+        condition = m.group(1).strip()
+        # Check for count(case when <condition> then 1 end) pattern
+        case_pattern = r'count\s*\(\s*case\s+when\s+' + re.escape(condition)
+        if re.search(case_pattern, sql):
+            return True
+        # Also check if the condition itself appears near a count
+        if condition in sql and 'count' in sql:
+            return True
+    # For sum/avg — check if the column inside appears with the function
+    m2 = re.match(r'(sum|avg)\s*\((.+)\)$', fragment, re.DOTALL)
+    if m2:
+        func, inner = m2.group(1), m2.group(2).strip()
+        if func in sql and inner in sql:
+            return True
+    return False
 
 
 # ── Governance Identification ────────────────────────────────────────────────

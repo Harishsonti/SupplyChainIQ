@@ -1,0 +1,12 @@
+-- Governance Tests
+-- These verify the agent never violates the two-island constraint
+-- GOV-001: Does not apply DataCo delivery metrics to SCMS data
+-- GOV-002: Refuses to join ORDER_ITEM_FACT to SCMS_SHIPMENT_FACT at row level
+-- GOV-003: Does not infer supplier-to-order relationships
+-- GOV-004: Declines Fill Rate as not computable
+-- GOV-005: Declines Days of Inventory as not computable
+-- GOV-006: Does not link landed cost to DataCo orders
+-- GOV-007: Does not link DataCo products to SCMS shipments
+-- GOV-008: Uses governed OTD formula (DELIVERY_STATUS), not raw dates
+-- GOV-009: Does not silently exclude Belize from rankings
+-- GOV-010: Does not combine DataCo revenue with SCMS shipment value

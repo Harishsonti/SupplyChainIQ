@@ -1,0 +1,36 @@
+CREATE OR REPLACE TABLE SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY (
+    METRIC_ID VARCHAR,
+    METRIC_NAME VARCHAR,
+    VERSION VARCHAR,
+    SOURCE_SYSTEM VARCHAR,
+    GRAIN VARCHAR,
+    STATUS VARCHAR,
+    DEFINITION VARCHAR,
+    SQL_EXPRESSION VARCHAR
+);
+
+INSERT INTO SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY VALUES
+    ('OTD_PCT',             'On-Time Delivery %',   '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Percentage of non-cancelled order items delivered on time or in advance',
+     '100.0 * COUNT_IF(DELIVERY_STATUS IN (''Advance shipping'',''Shipping on time'')) / NULLIF(COUNT_IF(DELIVERY_STATUS != ''Shipping canceled''), 0)'),
+    ('DELAY_RATE_PCT',      'Delay Rate %',         '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Percentage of non-cancelled order items with late delivery',
+     '100.0 * COUNT_IF(DELIVERY_STATUS = ''Late delivery'') / NULLIF(COUNT_IF(DELIVERY_STATUS != ''Shipping canceled''), 0)'),
+    ('AVG_DELAY_DAYS',      'Avg Delivery Delay',   '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Average excess shipping days for late items (actual minus scheduled, where positive)',
+     'AVG(CASE WHEN DELIVERY_STATUS != ''Shipping canceled'' AND DAYS_FOR_SHIPPING_REAL > DAYS_FOR_SHIPMENT_SCHEDULED THEN DAYS_FOR_SHIPPING_REAL - DAYS_FOR_SHIPMENT_SCHEDULED END)'),
+    ('TOTAL_SALES',         'Total Sales',          '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Sum of DataCo order item sales revenue',
+     'SUM(SALES)'),
+    ('TOTAL_PROFIT',        'Total Profit',         '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Sum of DataCo order profit per order item',
+     'SUM(ORDER_PROFIT_PER_ORDER)'),
+    ('PROFIT_MARGIN_PCT',   'Profit Margin %',      '1.0', 'DataCo', 'ORDER_ITEM', 'Governed',
+     'Profit as a percentage of sales',
+     '100.0 * SUM(ORDER_PROFIT_PER_ORDER) / NULLIF(SUM(SALES), 0)'),
+    ('TOTAL_FREIGHT',       'Total Freight Cost',   '1.0', 'SCMS',   'SHIPMENT',   'Governed',
+     'Sum of SCMS freight cost in USD (excludes nulls)',
+     'SUM(FREIGHT_COST_USD)'),
+    ('LOGISTICS_RATE_PCT',  'Logistics Cost Rate %','1.0', 'SCMS',   'SHIPMENT',   'Governed',
+     'Freight cost as a percentage of shipment value',
+     '100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0)');

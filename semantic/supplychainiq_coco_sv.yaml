@@ -1,0 +1,599 @@
+name: SUPPLYCHAINIQ_COCO_SV
+description: >
+  SupplyChainIQ CoCo semantic view for supply chain analytics across two independent source systems.
+
+  CRITICAL CONSTRAINT: This model contains two independent data islands.
+  - DataCo (e-commerce orders, 2015-2018): ORDER_ITEM_FACT, CUSTOMER_DIM, PRODUCT_DIM, CALENDAR_DIM
+  - SCMS (pharmaceutical procurement shipments, 2006-2015): SCMS_SHIPMENT_FACT, SUPPLIER_DIM, MANUFACTURING_SITE_DIM
+
+  ORDER_ITEM_FACT and SCMS_SHIPMENT_FACT must NEVER be joined to each other at row level.
+  Cross-source comparison is only valid at the country-aggregate level via GEOGRAPHY_DIM.
+  Fill Rate and Days of Inventory are NOT computable from this data.
+
+tables:
+  - name: ORDER_ITEM_FACT
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: ORDER_ITEM_FACT
+    primary_key:
+      columns:
+        - ORDER_ITEM_ID
+    description: >
+      DataCo order line items. Grain: one row per ORDER_ITEM_ID.
+      Contains delivery performance, sales, profit, and shipping attributes.
+      Source system: DataCo (e-commerce). Date range: 2015-2018.
+    dimensions:
+      - name: ORDER_ITEM_ID
+        expr: ORDER_ITEM_ID
+        description: Unique order line item identifier (primary key)
+        unique: true
+        data_type: NUMBER
+      - name: ORDER_ID
+        expr: ORDER_ID
+        description: Parent order identifier
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        description: Customer identifier (FK to CUSTOMER_DIM)
+        data_type: NUMBER
+      - name: PRODUCT_CARD_ID
+        expr: PRODUCT_CARD_ID
+        description: Product identifier (FK to PRODUCT_DIM)
+        data_type: NUMBER
+      - name: ORDER_DATE
+        expr: ORDER_DATE
+        description: Date the order was placed
+        data_type: DATE
+      - name: SHIPPING_DATE
+        expr: SHIPPING_DATE
+        description: Date the order item was shipped
+        data_type: DATE
+      - name: DELIVERY_STATUS
+        expr: DELIVERY_STATUS
+        description: >
+          Delivery outcome. Values: 'Advance shipping', 'Shipping on time',
+          'Late delivery', 'Shipping canceled'.
+          Used to compute On-Time Delivery % and Delay Rate %.
+        data_type: TEXT
+      - name: ORDER_TYPE
+        expr: ORDER_TYPE
+        description: Type of transaction
+        data_type: TEXT
+      - name: SHIPPING_MODE
+        expr: SHIPPING_MODE
+        description: Shipping method (Standard Class, Second Class, First Class, Same Day)
+        data_type: TEXT
+      - name: ORDER_STATUS
+        expr: ORDER_STATUS
+        description: Order processing status
+        data_type: TEXT
+      - name: ORDER_COUNTRY
+        expr: ORDER_COUNTRY
+        description: Destination country for the order
+        data_type: TEXT
+      - name: ORDER_REGION
+        expr: ORDER_REGION
+        description: Geographic region of the order destination
+        data_type: TEXT
+      - name: ORDER_STATE
+        expr: ORDER_STATE
+        description: State/province of the order destination
+        data_type: TEXT
+      - name: ORDER_CITY
+        expr: ORDER_CITY
+        description: City of the order destination
+        data_type: TEXT
+      - name: MARKET
+        expr: MARKET
+        description: Market segment (e.g., LATAM, Europe, Pacific Asia, USCA, Africa)
+        data_type: TEXT
+      - name: CATEGORY_NAME
+        expr: CATEGORY_NAME
+        description: Product category name
+        data_type: TEXT
+      - name: DEPARTMENT_NAME
+        expr: DEPARTMENT_NAME
+        description: Product department name
+        data_type: TEXT
+      - name: PRODUCT_NAME
+        expr: PRODUCT_NAME
+        description: Product name
+        data_type: TEXT
+    measures:
+      - name: SALES
+        expr: SALES
+        description: Revenue for this order item in USD
+        data_type: NUMBER
+      - name: ORDER_PROFIT_PER_ORDER
+        expr: ORDER_PROFIT_PER_ORDER
+        description: Profit attributed to this order item in USD
+        data_type: NUMBER
+      - name: ORDER_ITEM_QUANTITY
+        expr: ORDER_ITEM_QUANTITY
+        description: Quantity ordered
+        data_type: NUMBER
+      - name: ORDER_ITEM_PRODUCT_PRICE
+        expr: ORDER_ITEM_PRODUCT_PRICE
+        description: Unit product price
+        data_type: NUMBER
+      - name: ORDER_ITEM_DISCOUNT
+        expr: ORDER_ITEM_DISCOUNT
+        description: Discount amount applied
+        data_type: NUMBER
+      - name: DAYS_FOR_SHIPPING_REAL
+        expr: DAYS_FOR_SHIPPING_REAL
+        description: Actual number of days for shipping
+        data_type: NUMBER
+      - name: DAYS_FOR_SHIPMENT_SCHEDULED
+        expr: DAYS_FOR_SHIPMENT_SCHEDULED
+        description: Scheduled/planned number of days for shipping
+        data_type: NUMBER
+    metrics:
+      - name: ON_TIME_DELIVERY_PCT
+        expr: "100.0 * COUNT_IF(ORDER_ITEM_FACT.DELIVERY_STATUS IN ('Advance shipping','Shipping on time')) / NULLIF(COUNT_IF(ORDER_ITEM_FACT.DELIVERY_STATUS != 'Shipping canceled'), 0)"
+        description: >
+          Governed metric. Percentage of non-cancelled order items delivered on time or in advance.
+          Excludes items with DELIVERY_STATUS = 'Shipping canceled'.
+        data_type: NUMBER
+      - name: DELAY_RATE_PCT
+        expr: "100.0 * COUNT_IF(ORDER_ITEM_FACT.DELIVERY_STATUS = 'Late delivery') / NULLIF(COUNT_IF(ORDER_ITEM_FACT.DELIVERY_STATUS != 'Shipping canceled'), 0)"
+        description: >
+          Governed metric. Percentage of non-cancelled order items with late delivery.
+        data_type: NUMBER
+      - name: AVG_DELIVERY_DELAY_DAYS
+        expr: "AVG(CASE WHEN ORDER_ITEM_FACT.DELIVERY_STATUS != 'Shipping canceled' AND ORDER_ITEM_FACT.DAYS_FOR_SHIPPING_REAL > ORDER_ITEM_FACT.DAYS_FOR_SHIPMENT_SCHEDULED THEN ORDER_ITEM_FACT.DAYS_FOR_SHIPPING_REAL - ORDER_ITEM_FACT.DAYS_FOR_SHIPMENT_SCHEDULED END)"
+        description: >
+          Governed metric. Average excess shipping days for late deliveries (actual minus scheduled, only where positive).
+        data_type: NUMBER
+      - name: TOTAL_SALES
+        expr: SUM(ORDER_ITEM_FACT.SALES)
+        description: "Governed metric. Total sales revenue in USD from DataCo order items."
+        data_type: NUMBER
+      - name: TOTAL_PROFIT
+        expr: SUM(ORDER_ITEM_FACT.ORDER_PROFIT_PER_ORDER)
+        description: "Governed metric. Total profit in USD from DataCo order items."
+        data_type: NUMBER
+      - name: PROFIT_MARGIN_PCT
+        expr: "100.0 * SUM(ORDER_ITEM_FACT.ORDER_PROFIT_PER_ORDER) / NULLIF(SUM(ORDER_ITEM_FACT.SALES), 0)"
+        description: "Governed metric. Profit as a percentage of sales."
+        data_type: NUMBER
+      - name: ORDER_COUNT
+        expr: COUNT(DISTINCT ORDER_ITEM_FACT.ORDER_ID)
+        description: Count of distinct orders
+        data_type: NUMBER
+      - name: ORDER_ITEM_COUNT
+        expr: COUNT(ORDER_ITEM_FACT.ORDER_ITEM_ID)
+        description: Count of order line items
+        data_type: NUMBER
+
+  - name: SCMS_SHIPMENT_FACT
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: SCMS_SHIPMENT_FACT
+    primary_key:
+      columns:
+        - SHIPMENT_ID
+    description: >
+      SCMS pharmaceutical procurement shipment lines. Grain: one row per SHIPMENT_ID.
+      Contains logistics costs, vendor info, manufacturing sites, and delivery dates.
+      Source system: SCMS. Date range: 2006-2015.
+      DO NOT JOIN this table to ORDER_ITEM_FACT. They are independent source systems.
+    dimensions:
+      - name: SHIPMENT_ID
+        expr: SHIPMENT_ID
+        description: Unique shipment line identifier (primary key)
+        unique: true
+        data_type: NUMBER
+      - name: COUNTRY
+        expr: COUNTRY
+        description: Destination country for the shipment
+        data_type: TEXT
+      - name: VENDOR
+        expr: VENDOR
+        description: Supplier/vendor name (FK concept to SUPPLIER_DIM)
+        data_type: TEXT
+      - name: MANUFACTURING_SITE
+        expr: MANUFACTURING_SITE
+        description: Manufacturing site/plant name (FK concept to MANUFACTURING_SITE_DIM)
+        data_type: TEXT
+      - name: SHIPMENT_MODE
+        expr: SHIPMENT_MODE
+        description: Transportation mode (Air, Truck, Ocean, Air Charter)
+        data_type: TEXT
+      - name: PRODUCT_GROUP
+        expr: PRODUCT_GROUP
+        description: Pharmaceutical product group (ARV, HRDT, ANTM, ACT)
+        data_type: TEXT
+      - name: SUB_CLASSIFICATION
+        expr: SUB_CLASSIFICATION
+        description: Product sub-classification
+        data_type: TEXT
+      - name: BRAND
+        expr: BRAND
+        description: Product brand name
+        data_type: TEXT
+      - name: FULFILL_VIA
+        expr: FULFILL_VIA
+        description: Fulfillment method (Direct Drop, From RDC)
+        data_type: TEXT
+      - name: MANAGED_BY
+        expr: MANAGED_BY
+        description: Managing organization
+        data_type: TEXT
+      - name: SCHEDULED_DELIVERY_DATE
+        expr: SCHEDULED_DELIVERY_DATE
+        description: Planned delivery date
+        data_type: DATE
+      - name: DELIVERED_TO_CLIENT_DATE
+        expr: DELIVERED_TO_CLIENT_DATE
+        description: Actual delivery date
+        data_type: DATE
+      - name: FREIGHT_COST_IS_NULL
+        expr: FREIGHT_COST_IS_NULL
+        description: Data quality flag - TRUE when freight cost is missing (40% of rows)
+        data_type: BOOLEAN
+    measures:
+      - name: LINE_ITEM_VALUE
+        expr: LINE_ITEM_VALUE
+        description: Value of the shipment line item in USD
+        data_type: NUMBER
+      - name: FREIGHT_COST_USD
+        expr: FREIGHT_COST_USD
+        description: Freight cost in USD (NULL for ~40% of rows)
+        data_type: NUMBER
+      - name: LINE_ITEM_INSURANCE_USD
+        expr: LINE_ITEM_INSURANCE_USD
+        description: Insurance cost in USD
+        data_type: NUMBER
+      - name: WEIGHT_KILOGRAMS
+        expr: WEIGHT_KILOGRAMS
+        description: Weight in kilograms (NULL for ~38% of rows)
+        data_type: NUMBER
+      - name: LINE_ITEM_QUANTITY
+        expr: LINE_ITEM_QUANTITY
+        description: Quantity of items in this shipment line
+        data_type: NUMBER
+      - name: PACK_PRICE
+        expr: PACK_PRICE
+        description: Price per pack
+        data_type: NUMBER
+      - name: UNIT_PRICE
+        expr: UNIT_PRICE
+        description: Price per unit
+        data_type: NUMBER
+    metrics:
+      - name: TOTAL_FREIGHT_COST
+        expr: SUM(SCMS_SHIPMENT_FACT.FREIGHT_COST_USD)
+        description: "Governed metric. Total freight cost in USD from SCMS shipments."
+        data_type: NUMBER
+      - name: LOGISTICS_COST_RATE_PCT
+        expr: "100.0 * SUM(SCMS_SHIPMENT_FACT.FREIGHT_COST_USD) / NULLIF(SUM(SCMS_SHIPMENT_FACT.LINE_ITEM_VALUE), 0)"
+        description: "Governed metric. Freight cost as a percentage of shipment value."
+        data_type: NUMBER
+      - name: TOTAL_SHIPMENT_VALUE
+        expr: SUM(SCMS_SHIPMENT_FACT.LINE_ITEM_VALUE)
+        description: "Total shipment value in USD."
+        data_type: NUMBER
+      - name: SHIPMENT_COUNT
+        expr: COUNT(SCMS_SHIPMENT_FACT.SHIPMENT_ID)
+        description: Count of shipment lines
+        data_type: NUMBER
+      - name: TOTAL_INSURANCE_COST
+        expr: SUM(SCMS_SHIPMENT_FACT.LINE_ITEM_INSURANCE_USD)
+        description: Total insurance cost in USD
+        data_type: NUMBER
+
+  - name: CUSTOMER_DIM
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: CUSTOMER_DIM
+    primary_key:
+      columns:
+        - CUSTOMER_ID
+    description: "DataCo customer dimension. Grain: one row per CUSTOMER_ID."
+    dimensions:
+      - name: CUSTOMER_SK
+        expr: CUSTOMER_SK
+        description: Surrogate key
+        unique: true
+        data_type: NUMBER
+      - name: CUSTOMER_ID
+        expr: CUSTOMER_ID
+        description: Natural customer identifier
+        data_type: NUMBER
+      - name: CUSTOMER_FNAME
+        expr: CUSTOMER_FNAME
+        description: Customer first name
+        data_type: TEXT
+      - name: CUSTOMER_LNAME
+        expr: CUSTOMER_LNAME
+        description: Customer last name
+        data_type: TEXT
+      - name: CUSTOMER_SEGMENT
+        expr: CUSTOMER_SEGMENT
+        description: Customer segment (Consumer, Corporate, Home Office)
+        data_type: TEXT
+      - name: CUSTOMER_COUNTRY
+        expr: CUSTOMER_COUNTRY
+        description: Customer country
+        data_type: TEXT
+      - name: CUSTOMER_STATE
+        expr: CUSTOMER_STATE
+        description: Customer state/province
+        data_type: TEXT
+      - name: CUSTOMER_CITY
+        expr: CUSTOMER_CITY
+        description: Customer city
+        data_type: TEXT
+
+  - name: PRODUCT_DIM
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: PRODUCT_DIM
+    primary_key:
+      columns:
+        - PRODUCT_CARD_ID
+    description: "DataCo product dimension. Grain: one row per PRODUCT_CARD_ID."
+    dimensions:
+      - name: PRODUCT_SK
+        expr: PRODUCT_SK
+        description: Surrogate key
+        unique: true
+        data_type: NUMBER
+      - name: PRODUCT_CARD_ID
+        expr: PRODUCT_CARD_ID
+        description: Natural product identifier
+        data_type: NUMBER
+      - name: PRODUCT_NAME
+        expr: PRODUCT_NAME
+        description: Product name
+        data_type: TEXT
+      - name: PRODUCT_PRICE
+        expr: PRODUCT_PRICE
+        description: Product list price
+        data_type: NUMBER
+      - name: PRODUCT_STATUS
+        expr: PRODUCT_STATUS
+        description: Product availability status
+        data_type: TEXT
+      - name: CATEGORY_NAME
+        expr: CATEGORY_NAME
+        description: Product category
+        data_type: TEXT
+      - name: DEPARTMENT_NAME
+        expr: DEPARTMENT_NAME
+        description: Product department
+        data_type: TEXT
+
+  - name: SUPPLIER_DIM
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: SUPPLIER_DIM
+    primary_key:
+      columns:
+        - VENDOR_NAME
+    description: "SCMS supplier/vendor dimension. Grain: one row per VENDOR_NAME."
+    dimensions:
+      - name: SUPPLIER_SK
+        expr: SUPPLIER_SK
+        description: Surrogate key
+        unique: true
+        data_type: NUMBER
+      - name: VENDOR_NAME
+        expr: VENDOR_NAME
+        description: Supplier/vendor name
+        data_type: TEXT
+
+  - name: MANUFACTURING_SITE_DIM
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: MANUFACTURING_SITE_DIM
+    primary_key:
+      columns:
+        - SITE_NAME
+    description: "SCMS manufacturing site dimension. Grain: one row per SITE_NAME."
+    dimensions:
+      - name: SITE_SK
+        expr: SITE_SK
+        description: Surrogate key
+        unique: true
+        data_type: NUMBER
+      - name: SITE_NAME
+        expr: SITE_NAME
+        description: Manufacturing site/plant name
+        data_type: TEXT
+
+  - name: GEOGRAPHY_DIM
+    base_table:
+      database: SUPPLYCHAINIQ_COCO
+      schema: CORE
+      table: GEOGRAPHY_DIM
+    primary_key:
+      columns:
+        - COUNTRY_NAME
+    description: >
+      Conformed country dimension spanning both DataCo and SCMS.
+      Use this for country-level cross-source comparison ONLY at aggregate level.
+    dimensions:
+      - name: COUNTRY_NAME
+        expr: COUNTRY_NAME
+        description: Country name (natural key)
+        unique: true
+        data_type: TEXT
+      - name: IN_DATACO
+        expr: IN_DATACO
+        description: Whether this country appears in DataCo orders
+        data_type: BOOLEAN
+      - name: IN_SCMS
+        expr: IN_SCMS
+        description: Whether this country appears in SCMS shipments
+        data_type: BOOLEAN
+      - name: SOURCE_COVERAGE
+        expr: SOURCE_COVERAGE
+        description: "Which sources reference this country: BOTH, DATACO_ONLY, or SCMS_ONLY"
+        data_type: TEXT
+
+relationships:
+  - name: ORDER_ITEM_TO_CUSTOMER
+    left_table: ORDER_ITEM_FACT
+    right_table: CUSTOMER_DIM
+    relationship_columns:
+      - left_column: CUSTOMER_ID
+        right_column: CUSTOMER_ID
+    join_type: many_to_one
+    relationship_type: many_to_one
+  - name: ORDER_ITEM_TO_PRODUCT
+    left_table: ORDER_ITEM_FACT
+    right_table: PRODUCT_DIM
+    relationship_columns:
+      - left_column: PRODUCT_CARD_ID
+        right_column: PRODUCT_CARD_ID
+    join_type: many_to_one
+    relationship_type: many_to_one
+  - name: SHIPMENT_TO_SUPPLIER
+    left_table: SCMS_SHIPMENT_FACT
+    right_table: SUPPLIER_DIM
+    relationship_columns:
+      - left_column: VENDOR
+        right_column: VENDOR_NAME
+    join_type: many_to_one
+    relationship_type: many_to_one
+  - name: SHIPMENT_TO_SITE
+    left_table: SCMS_SHIPMENT_FACT
+    right_table: MANUFACTURING_SITE_DIM
+    relationship_columns:
+      - left_column: MANUFACTURING_SITE
+        right_column: SITE_NAME
+    join_type: many_to_one
+    relationship_type: many_to_one
+  - name: ORDER_ITEM_TO_GEOGRAPHY
+    left_table: ORDER_ITEM_FACT
+    right_table: GEOGRAPHY_DIM
+    relationship_columns:
+      - left_column: ORDER_COUNTRY
+        right_column: COUNTRY_NAME
+    join_type: many_to_one
+    relationship_type: many_to_one
+  - name: SHIPMENT_TO_GEOGRAPHY
+    left_table: SCMS_SHIPMENT_FACT
+    right_table: GEOGRAPHY_DIM
+    relationship_columns:
+      - left_column: COUNTRY
+        right_column: COUNTRY_NAME
+    join_type: many_to_one
+    relationship_type: many_to_one
+
+verified_queries:
+  - name: "Enterprise On-Time Delivery Rate"
+    question: "What is our overall on-time delivery percentage?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT ROUND(100.0 * COUNT_IF(DELIVERY_STATUS IN ('Advance shipping','Shipping on time'))
+        / NULLIF(COUNT_IF(DELIVERY_STATUS != 'Shipping canceled'), 0), 2) AS ON_TIME_DELIVERY_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+  - name: "Enterprise Delay Rate"
+    question: "What is our delivery delay rate?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT ROUND(100.0 * COUNT_IF(DELIVERY_STATUS = 'Late delivery')
+        / NULLIF(COUNT_IF(DELIVERY_STATUS != 'Shipping canceled'), 0), 2) AS DELAY_RATE_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+  - name: "Enterprise Sales and Profit"
+    question: "What are total sales and profit?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT ROUND(SUM(SALES), 2) AS TOTAL_SALES, ROUND(SUM(ORDER_PROFIT_PER_ORDER), 2) AS TOTAL_PROFIT,
+        ROUND(100.0 * SUM(ORDER_PROFIT_PER_ORDER) / NULLIF(SUM(SALES), 0), 2) AS PROFIT_MARGIN_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+  - name: "Enterprise Logistics Cost Rate"
+    question: "What is our overall logistics cost rate?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT ROUND(100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0), 2) AS LOGISTICS_COST_RATE_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.SCMS_SHIPMENT_FACT
+  - name: "Country with Highest Logistics Cost Rate"
+    question: "Which country has the highest logistics cost rate?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT COUNTRY, ROUND(100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0), 2) AS LOGISTICS_COST_RATE_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.SCMS_SHIPMENT_FACT
+      GROUP BY COUNTRY ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5
+  - name: "Top 5 Countries by Delivery Delay Rate"
+    question: "Which countries have the worst delivery delay rates?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT ORDER_COUNTRY AS COUNTRY,
+        ROUND(100.0 * COUNT_IF(DELIVERY_STATUS = 'Late delivery')
+          / NULLIF(COUNT_IF(DELIVERY_STATUS != 'Shipping canceled'), 0), 2) AS DELAY_RATE_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+      GROUP BY ORDER_COUNTRY ORDER BY DELAY_RATE_PCT DESC LIMIT 5
+  - name: "Delivery Performance by Shipping Mode"
+    question: "What is the on-time delivery rate by shipping mode?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT SHIPPING_MODE,
+        ROUND(100.0 * COUNT_IF(DELIVERY_STATUS IN ('Advance shipping','Shipping on time'))
+          / NULLIF(COUNT_IF(DELIVERY_STATUS != 'Shipping canceled'), 0), 2) AS ON_TIME_DELIVERY_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+      GROUP BY SHIPPING_MODE ORDER BY ON_TIME_DELIVERY_PCT DESC
+  - name: "Top 10 Suppliers by Freight Cost"
+    question: "Which suppliers have the highest freight costs?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT VENDOR AS SUPPLIER, ROUND(SUM(FREIGHT_COST_USD), 2) AS TOTAL_FREIGHT_COST,
+        ROUND(100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0), 2) AS LOGISTICS_COST_RATE_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.SCMS_SHIPMENT_FACT
+      WHERE VENDOR IS NOT NULL
+      GROUP BY VENDOR ORDER BY TOTAL_FREIGHT_COST DESC LIMIT 10
+  - name: "Monthly Sales Trend"
+    question: "Show monthly sales trend"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT DATE_TRUNC('MONTH', ORDER_DATE)::DATE AS MONTH_START,
+        ROUND(SUM(SALES), 2) AS TOTAL_SALES, COUNT(DISTINCT ORDER_ID) AS ORDER_COUNT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+      GROUP BY MONTH_START ORDER BY MONTH_START
+  - name: "Customer Segment Performance"
+    question: "How do customer segments compare on sales and profit?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT c.CUSTOMER_SEGMENT,
+        ROUND(SUM(f.SALES), 2) AS TOTAL_SALES,
+        ROUND(SUM(f.ORDER_PROFIT_PER_ORDER), 2) AS TOTAL_PROFIT,
+        ROUND(100.0 * SUM(f.ORDER_PROFIT_PER_ORDER) / NULLIF(SUM(f.SALES), 0), 2) AS PROFIT_MARGIN_PCT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT f
+      JOIN SUPPLYCHAINIQ_COCO.CORE.CUSTOMER_DIM c ON f.CUSTOMER_ID = c.CUSTOMER_ID
+      GROUP BY c.CUSTOMER_SEGMENT ORDER BY TOTAL_SALES DESC
+  - name: "Product Category Sales"
+    question: "What are the sales by product category?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT CATEGORY_NAME, ROUND(SUM(SALES), 2) AS TOTAL_SALES,
+        ROUND(SUM(ORDER_PROFIT_PER_ORDER), 2) AS TOTAL_PROFIT
+      FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
+      GROUP BY CATEGORY_NAME ORDER BY TOTAL_SALES DESC
+  - name: "Shipment Count by Country"
+    question: "How many shipments per country?"
+    verified_at: "2026-10-02"
+    verified_by: "CoCo"
+    sql: >
+      SELECT COUNTRY, COUNT(*) AS SHIPMENT_COUNT, ROUND(SUM(LINE_ITEM_VALUE), 2) AS TOTAL_VALUE
+      FROM SUPPLYCHAINIQ_COCO.CORE.SCMS_SHIPMENT_FACT
+      GROUP BY COUNTRY ORDER BY SHIPMENT_COUNT DESC

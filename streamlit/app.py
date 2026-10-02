@@ -1129,13 +1129,10 @@ with analyst_tab:
         st.session_state["_analyst_ver"] = _VER
         st.session_state["cur_q"] = ""
         st.session_state["cur_a"] = ""
-        st.session_state["agent_busy"] = False
         st.session_state["cur_prov"] = None
-    for k, d in [("cur_q", ""), ("cur_a", ""), ("agent_busy", False), ("cur_prov", None), ("preset_q", "")]:
+    for k, d in [("cur_q", ""), ("cur_a", ""), ("cur_prov", None), ("preset_q", "")]:
         if k not in st.session_state:
             st.session_state[k] = d
-
-    is_busy = st.session_state.agent_busy
 
     # ── Hero ──────────────────────────────────────────────────────────────
     st.markdown(
@@ -1157,10 +1154,10 @@ with analyst_tab:
             user_input = st.text_input(
                 "Query", value=_default_q,
                 placeholder="Ask a supply-chain question...",
-                key="analyst_input", label_visibility="collapsed", disabled=is_busy,
+                key="analyst_input", label_visibility="collapsed",
             )
         with col_btn:
-            submitted = st.form_submit_button("Ask \u2192" if not is_busy else "\u2026", type="primary", disabled=is_busy)
+            submitted = st.form_submit_button("Ask \u2192", type="primary")
 
     # ── Trust row ─────────────────────────────────────────────────────────
     st.markdown(
@@ -1197,37 +1194,30 @@ with analyst_tab:
                 with preset_cols[i]:
                     if st.button(pq, key=f"preset_{i}_{group_label}", use_container_width=True):
                         st.session_state["preset_q"] = pq
-                        st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Loading state ─────────────────────────────────────────────────────
-    if is_busy:
-        with st.spinner("Analyzing supply chain: resolving governed metric and source..."):
-            pass
-
-    # ── Submit handler ────────────────────────────────────────────────────
-    if submitted and user_input and user_input.strip() and not is_busy:
+    # ── Submit handler + agent execution (single cycle) ─────────────────
+    _do_exec = False
+    if submitted and user_input and user_input.strip():
         st.session_state.cur_q = user_input.strip()
         st.session_state.cur_a = ""
-        st.session_state.agent_busy = True
-        st.rerun()
+        st.session_state.cur_prov = None
+        _do_exec = True
 
-    # ── Agent execution ───────────────────────────────────────────────────
-    if st.session_state.agent_busy and st.session_state.cur_q:
-        try:
-            req_body = _json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": st.session_state.cur_q}]}]})
-            result_raw = session.sql(f"SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN('SUPPLYCHAINIQ_COCO.APP.SUPPLYCHAINIQ_COCO_AGENT', $${req_body}$$)").collect()[0][0]
-            prov_parsed = parse_agent_response(result_raw)
-            response_text = prov_parsed.get("text", "")
-            if not response_text:
-                response_text = "The agent returned an empty response."
-            st.session_state.cur_a = response_text
-            st.session_state.cur_prov = build_provenance(prov_parsed, session)
-        except Exception as e:
-            st.session_state.cur_a = f"Agent error: {str(e)}"
-            st.session_state.cur_prov = None
-        st.session_state.agent_busy = False
-        st.rerun()
+    if _do_exec and st.session_state.cur_q:
+        with st.spinner("Analyzing supply chain: resolving governed metric and source..."):
+            try:
+                req_body = _json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": st.session_state.cur_q}]}]})
+                result_raw = session.sql(f"SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN('SUPPLYCHAINIQ_COCO.APP.SUPPLYCHAINIQ_COCO_AGENT', $${req_body}$$)").collect()[0][0]
+                prov_parsed = parse_agent_response(result_raw)
+                response_text = prov_parsed.get("text", "")
+                if not response_text:
+                    response_text = "The agent returned an empty response."
+                st.session_state.cur_a = response_text
+                st.session_state.cur_prov = build_provenance(prov_parsed, session)
+            except Exception as e:
+                st.session_state.cur_a = f"Agent error: {str(e)}"
+                st.session_state.cur_prov = None
 
     # ── Render result ─────────────────────────────────────────────────────
     if st.session_state.cur_q and st.session_state.cur_a:
@@ -1378,7 +1368,6 @@ with analyst_tab:
             st.session_state.cur_q = ""
             st.session_state.cur_a = ""
             st.session_state.cur_prov = None
-            st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

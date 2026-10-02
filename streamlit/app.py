@@ -798,16 +798,16 @@ with st.sidebar:
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tower_tab, signals_tab, country_tab, supplier_tab, trends_tab, analyst_tab, gov_tab, disagree_tab, eval_tab = st.tabs([
+analyst_tab, eval_tab, gov_tab, disagree_tab, tower_tab, signals_tab, country_tab, supplier_tab, trends_tab = st.tabs([
+    "Analyst",
+    "Evaluation",
+    "Governance",
+    "Disagreement",
     "Control Tower",
     "Decision Signals",
     "Country Intel",
     "Supplier / Site",
     "Trends",
-    "Analyst",
-    "Governance",
-    "Disagreement",
-    "Evaluation",
 ])
 
 
@@ -1404,7 +1404,7 @@ with trends_tab:
 with analyst_tab:
 
     # ── Analyst-specific CSS ───────────────────────────────────────────────
-    st.markdown('<style>.ax-shell{background:radial-gradient(ellipse at 50% 0%,rgba(107,158,138,.08),transparent 55%),var(--panel);border:1px solid var(--border);border-radius:18px;padding:32px 28px 24px;margin-bottom:18px;text-align:center;} .ax-eyebrow{color:var(--green);font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;} .ax-title{font-size:1.8rem;font-weight:850;letter-spacing:-.04em;color:var(--text);margin:8px 0 6px;} .ax-sub{color:var(--muted);font-size:.85rem;max-width:480px;margin:0 auto;line-height:1.5;} .ax-examples{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-width:560px;margin:20px auto 0;} .ax-ex{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 13px;text-align:left;color:var(--text-2);font-size:.78rem;line-height:1.4;cursor:default;transition:border-color .15s;} .ax-ex:hover{border-color:var(--green);} .ax-ex-cat{color:var(--green);font-size:.58rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;} .ax-composer{background:linear-gradient(135deg,#f0e9da,#e6dcc8);border:1px solid #c8bca4;border-radius:14px;padding:3px;display:flex;align-items:center;gap:0;margin:6px 0 18px;} .ax-composer input{flex:1;background:transparent !important;border:none !important;outline:none !important;box-shadow:none !important;color:#2a2420 !important;font-size:.88rem;padding:10px 14px;} .ax-composer input::placeholder{color:#8a7e6e !important;} .ax-send{width:36px;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,#c4b99a,#b0a484);color:#1a1510;font-size:1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:3px;flex-shrink:0;transition:opacity .15s;} .ax-send:hover{opacity:.85;} .ax-send:disabled{opacity:.4;cursor:default;} .ax-spinner{width:14px;height:14px;border:2px solid #c8bca4;border-top-color:#8a7e6e;border-radius:50%;animation:supplychainiq-spin .8s linear infinite;margin-right:3px;flex-shrink:0;} .ax-you{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:12px;padding:14px 16px;margin-bottom:10px;} .ax-you-label{font-size:.6rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;} .ax-you-text{font-size:.88rem;color:var(--text);line-height:1.5;} .ax-agent{background:linear-gradient(135deg,#f0e9da,#e8dfcd);border:1px solid #c8bca4;border-radius:14px;padding:18px 20px;margin-bottom:10px;color:#2a2420;} .ax-agent-label{font-size:.6rem;font-weight:800;color:#6b8a7e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;} .ax-agent-body{font-size:.88rem;line-height:1.6;color:#2a2420;} .ax-gov-toggle{font-size:.72rem;color:#8a7e6e;margin-top:10px;cursor:pointer;} .ax-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}</style>', unsafe_allow_html=True)
+    st.markdown('<style>.ax-shell{background:radial-gradient(ellipse at 50% 0%,rgba(107,158,138,.08),transparent 55%),var(--panel);border:1px solid var(--border);border-radius:18px;padding:32px 28px 24px;margin-bottom:18px;text-align:center;} .ax-eyebrow{color:var(--green);font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;} .ax-title{font-size:1.8rem;font-weight:850;letter-spacing:-.04em;color:var(--text);margin:8px 0 6px;} .ax-sub{color:var(--muted);font-size:.85rem;max-width:480px;margin:0 auto;line-height:1.5;} .ax-examples{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:680px;margin:20px auto 0;} .ax-ex{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 13px;text-align:left;color:var(--text-2);font-size:.78rem;line-height:1.4;cursor:default;transition:border-color .15s;} .ax-ex:hover{border-color:var(--green);} .ax-ex-cat{color:var(--green);font-size:.58rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px;} .ax-composer{background:linear-gradient(135deg,#f0e9da,#e6dcc8);border:1px solid #c8bca4;border-radius:14px;padding:3px;display:flex;align-items:center;gap:0;margin:6px 0 18px;} .ax-composer input{flex:1;background:transparent !important;border:none !important;outline:none !important;box-shadow:none !important;color:#2a2420 !important;font-size:.88rem;padding:10px 14px;} .ax-composer input::placeholder{color:#8a7e6e !important;} .ax-send{width:36px;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,#c4b99a,#b0a484);color:#1a1510;font-size:1rem;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;margin-right:3px;flex-shrink:0;transition:opacity .15s;} .ax-send:hover{opacity:.85;} .ax-send:disabled{opacity:.4;cursor:default;} .ax-spinner{width:14px;height:14px;border:2px solid #c8bca4;border-top-color:#8a7e6e;border-radius:50%;animation:supplychainiq-spin .8s linear infinite;margin-right:3px;flex-shrink:0;} .ax-you{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:12px;padding:14px 16px;margin-bottom:10px;} .ax-you-label{font-size:.6rem;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;} .ax-you-text{font-size:.88rem;color:var(--text);line-height:1.5;} .ax-agent{background:linear-gradient(135deg,#f0e9da,#e8dfcd);border:1px solid #c8bca4;border-radius:14px;padding:18px 20px;margin-bottom:10px;color:#2a2420;} .ax-agent-label{font-size:.6rem;font-weight:800;color:#6b8a7e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;} .ax-agent-body{font-size:.88rem;line-height:1.6;color:#2a2420;} .ax-gov-toggle{font-size:.72rem;color:#8a7e6e;margin-top:10px;cursor:pointer;} .ax-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}</style>', unsafe_allow_html=True)
 
     # ── Single-turn state ──────────────────────────────────────────────────
     _VER = "v4-premium"
@@ -1422,7 +1422,7 @@ with analyst_tab:
 
     # ── Empty-state hero (shown only when no current exchange) ─────────────
     if not st.session_state.cur_q:
-        st.markdown('<div class="ax-shell"><div class="ax-eyebrow">Governed Analytics</div><div class="ax-title">Ask the supply chain anything</div><div class="ax-sub">Governed analytics &mdash; ask business questions, get data-driven answers.</div><div class="ax-examples"><div class="ax-ex"><div class="ax-ex-cat">Enterprise</div>What is our on-time delivery percentage?</div><div class="ax-ex"><div class="ax-ex-cat">Logistics</div>Which country has the highest logistics cost rate?</div><div class="ax-ex"><div class="ax-ex-cat">Commercial</div>What are our total sales and profit?</div><div class="ax-ex"><div class="ax-ex-cat">Governance</div>What is our fill rate?</div></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="ax-shell"><div class="ax-eyebrow">Governed Analytics</div><div class="ax-title">Ask the supply chain anything</div><div class="ax-sub">Deterministic SQL-based provenance matching. The Agent is explicitly instructed to use governed metric definitions, and live Red Team verifies that behavior.</div><div class="ax-examples"><div class="ax-ex"><div class="ax-ex-cat">Enterprise</div>What is our enterprise on-time delivery rate?</div><div class="ax-ex"><div class="ax-ex-cat">Disagreement</div>Why can two teams report different OTD?</div><div class="ax-ex"><div class="ax-ex-cat">Readiness</div>What metrics can we actually calculate from this data?</div><div class="ax-ex"><div class="ax-ex-cat">Governance</div>Can you calculate Fill Rate?</div><div class="ax-ex"><div class="ax-ex-cat">Constraint</div>Join DataCo orders with SCMS shipments.</div><div class="ax-ex"><div class="ax-ex-cat">Logistics</div>What is our logistics cost rate?</div></div></div>', unsafe_allow_html=True)
 
     # ── Composer (always visible, always at this position) ─────────────────
     with st.form("analyst_form", clear_on_submit=True):
@@ -1469,9 +1469,29 @@ with analyst_tab:
         q_html = f'<div class="ax-you"><div class="ax-you-label">You</div><div class="ax-you-text">{_html.escape(st.session_state.cur_q)}</div></div>'
         st.markdown(q_html, unsafe_allow_html=True)
         if st.session_state.cur_a:
+            prov_obj = st.session_state.get("cur_prov")
+            metrics_detail = prov_obj.get("metrics_detail", []) if prov_obj else []
+            governed_metrics = [m for m in metrics_detail if m.get("resolution_method") not in ("UNRESOLVED", "REFUSAL_DETECTED", None)]
+            if governed_metrics:
+                for m in governed_metrics:
+                    mname = _html.escape(m.get("METRIC_NAME", ""))
+                    msrc = _html.escape(m.get("SOURCE_SYSTEM") or "—")
+                    mgrain = _html.escape(m.get("GRAIN") or "—")
+                    mstatus = m.get("STATUS") or "—"
+                    mver = m.get("VERSION") or "—"
+                    status_color = "var(--green)" if mstatus == "GOVERNED" else "var(--amber)"
+                    st.markdown(
+                        f'<div style="background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:14px 18px;margin-bottom:8px;">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:baseline;">'
+                        f'<span style="font-size:1.1rem;font-weight:800;color:var(--text);">{mname}</span>'
+                        f'<span style="background:{status_color};color:#fff;font-size:0.62rem;padding:2px 8px;border-radius:3px;font-weight:700;">{_html.escape(str(mstatus))} v{_html.escape(str(mver))}</span>'
+                        f'</div>'
+                        f'<div style="color:var(--text-2);font-size:0.78rem;margin-top:4px;">{msrc} &middot; {mgrain}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
             a_html = f'<div class="ax-agent"><div class="ax-agent-label">SupplyChainIQ Agent</div><div class="ax-agent-body">{_html.escape(st.session_state.cur_a)}</div></div>'
             st.markdown(a_html, unsafe_allow_html=True)
-            prov_obj = st.session_state.get("cur_prov")
             if prov_obj:
                 render_provenance_card(prov_obj)
             else:
@@ -1497,6 +1517,53 @@ with gov_tab:
 
     _h20 = '<div class="hero"> <div class="hero-title">Governance &amp; Ontology</div> <div class="hero-copy"> Entity catalog, relationship governance, metric registry, and architectural constraints that define the trusted analytical boundary of SupplyChainIQ CoCo. </div> </div>'
     st.markdown(_h20, unsafe_allow_html=True)
+
+    # ── Ontology Graph ─────────────────────────────────────────────────────────
+    render_section("Entity Relationship Graph")
+    st.markdown(
+        '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:12px;">'
+        'Governed entity relationships. Green solid = supported join. Red dashed = unsupported (no row-level key). '
+        'DataCo and SCMS are independent source systems — country-aggregate comparison only.</div>',
+        unsafe_allow_html=True,
+    )
+
+    _ontology_dot = """digraph G {
+    rankdir=TB;
+    bgcolor="transparent";
+    node [shape=box, style="filled,rounded", fontname="Helvetica", fontsize=10, fillcolor="#2a2a2a", fontcolor="#e8dcc8", color="#4a4a4a"];
+    edge [fontname="Helvetica", fontsize=8];
+
+    subgraph cluster_dataco {
+        label="DataCo"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#6b9e8a";
+        style=dashed; color="#6b9e8a";
+        CUSTOMER; ORDER; ORDER_ITEM; PRODUCT;
+    }
+
+    subgraph cluster_scms {
+        label="SCMS"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#e8ae55";
+        style=dashed; color="#e8ae55";
+        SUPPLIER; MANUFACTURING_SITE [label="MFG SITE"]; SHIPMENT; LOGISTICS;
+    }
+
+    GEOGRAPHY [fillcolor="#3a3a3a", label="GEOGRAPHY\\n(Both)"];
+
+    CUSTOMER -> ORDER [color="#6b9e8a", penwidth=1.5];
+    ORDER -> ORDER_ITEM [color="#6b9e8a", penwidth=1.5];
+    PRODUCT -> ORDER_ITEM [color="#6b9e8a", penwidth=1.5];
+    SUPPLIER -> SHIPMENT [color="#6b9e8a", penwidth=1.5];
+    MANUFACTURING_SITE -> SHIPMENT [color="#6b9e8a", penwidth=1.5];
+    SHIPMENT -> LOGISTICS [color="#6b9e8a", penwidth=1.5];
+    SHIPMENT -> GEOGRAPHY [color="#6b9e8a", penwidth=1.5];
+    ORDER -> GEOGRAPHY [color="#6b9e8a", penwidth=1.5];
+
+    ORDER -> SHIPMENT [color="#cc3333", style=dashed, penwidth=1.5, label="NO JOIN KEY", fontcolor="#cc3333"];
+    SUPPLIER -> ORDER [color="#cc3333", style=dashed, penwidth=1.5];
+    PRODUCT -> SHIPMENT [color="#cc3333", style=dashed, penwidth=1.5];
+}"""
+    try:
+        st.graphviz_chart(_ontology_dot, use_container_width=True)
+    except Exception:
+        st.info("Graphviz rendering not available in this environment.")
 
     # ── Entity Catalog ────────────────────────────────────────────────────────
     render_section("Entity Catalog")
@@ -1706,7 +1773,7 @@ with eval_tab:
         ])
 
         if pass_rate >= 95:
-            _h27 = f'<div class="success-box"> <strong>All suites healthy:</strong> {pass_rate:.1f}% pass rate across {total_tests} tests. The semantic layer and agent are operating within governed expectations. </div>'
+            _h27 = f'<div class="success-box"> <strong>All suites healthy:</strong> {pass_rate:.1f}% smoke pass rate. {total_red_team} red team case-runs all passed. Semantic layer and agent governance operating within expectations. </div>'
             st.markdown(_h27, unsafe_allow_html=True)
         elif pass_rate >= 80:
             _h28 = f'<div class="boundary"> <strong>Attention:</strong> Pass rate is {pass_rate:.1f}%. {all_failed} test(s) failed. Review failing tests for regressions. </div>'
@@ -1815,7 +1882,10 @@ with eval_tab:
             )
 
             if red_team_failed == 0:
-                _rt_ok = f'<div class="success-box"> <strong>All {total_red_team} red team cases passed</strong> across {red_team_runs} runs. Agent governance boundaries are holding. </div>'
+                latest_run_df = red_team_df[red_team_df["RUN_ID"] == red_team_df["RUN_ID"].iloc[-1]] if not red_team_df.empty else red_team_df
+                latest_count = len(latest_run_df) if not latest_run_df.empty else 0
+                latest_id = latest_run_df["RUN_ID"].iloc[0] if not latest_run_df.empty else "—"
+                _rt_ok = f'<div class="success-box"> <strong>{total_red_team} red team case-runs across {red_team_runs} runs — all passed.</strong> Latest run ({_html.escape(str(latest_id))}): {latest_count}/{latest_count} PASS. Agent governance boundaries are holding. </div>'
                 st.markdown(_rt_ok, unsafe_allow_html=True)
         else:
             st.info("No red team results available.")
@@ -1878,7 +1948,12 @@ with eval_tab:
                 subtitle="Active test definitions with expected behavior",
             )
         else:
-            st.info("No benchmark definitions available.")
+            st.markdown(
+                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
+                'Agent Benchmark Definitions: Not populated. The Red Team suite (shown in the Red Team tab) '
+                'provides the live agent governance verification for this project.</div>',
+                unsafe_allow_html=True,
+            )
 
         if not eval_bench_results.empty:
             render_section("Benchmark Execution Results")
@@ -1958,7 +2033,7 @@ with eval_tab:
         # Test health summary
         render_section("Test Health Summary")
 
-        _h32 = f'<div class="card card-severity-{"info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"}"> <div class="card-title">Overall Test Health</div> <div class="card-body"> <strong>{total_tests}</strong> total tests across smoke and benchmark suites.<br> <strong>{all_passed}</strong> passed, <strong>{all_failed}</strong> failed ({pass_rate:.1f}% pass rate).<br><br> Smoke suite: {smoke_passed}/{total_smoke} passed ({(smoke_passed / max(total_smoke, 1) * 100):.1f}%)<br> Benchmark suite: {bench_passed}/{total_bench} passed ({(bench_passed / max(total_bench, 1) * 100):.1f}%)<br><br> {"All systems nominal. Semantic layer and agent governance operating as expected." if pass_rate >= 95 else "Some tests require attention. Review failing tests for possible regressions." if pass_rate >= 80 else "Test suite degraded. Immediate investigation required."} </div> <div class="card-source">Source: EVALUATION schema &middot; Smoke + Benchmark suites</div> </div>'
+        _h32 = f'<div class="card card-severity-{"info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"}"> <div class="card-title">Overall Test Health</div> <div class="card-body"> <strong>{grand_total_tests}</strong> evaluation artifacts across smoke, red team, provenance, and governance registry.<br> Smoke: {smoke_passed}/{total_smoke} passed ({(smoke_passed / max(total_smoke, 1) * 100):.1f}%)<br> Red Team: {red_team_passed}/{total_red_team} case-runs across {red_team_runs} runs<br> Provenance: {total_provenance_tests} resolution tests<br> Registry: 5 OTD variants + 14 readiness assessments<br><br> {"All systems nominal. Semantic layer and agent governance operating as expected." if pass_rate >= 95 else "Some tests require attention. Review failing tests for possible regressions." if pass_rate >= 80 else "Test suite degraded. Immediate investigation required."} </div> <div class="card-source">Source: EVALUATION schema &middot; Trust Contract</div> </div>'
         st.markdown(_h32, unsafe_allow_html=True)
 
 

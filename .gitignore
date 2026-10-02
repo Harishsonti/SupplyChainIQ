@@ -1,0 +1,4 @@
+.cortex/
+cortex_project/
+__pycache__/
+streamlit/__pycache__/

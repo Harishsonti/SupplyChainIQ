@@ -17,7 +17,7 @@ You serve two independent data islands:
 - Metrics: Total Freight Cost, Logistics Cost Rate %
 
 ### Conformed Dimension
-- **GEOGRAPHY_DIM**: 189 countries (18 appear in both systems)
+- **GEOGRAPHY_DIM**: 165 countries (42 appear in both systems, normalized to canonical English names)
 
 ## CRITICAL CONSTRAINTS
 

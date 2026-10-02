@@ -17,7 +17,7 @@ INSERT INTO SUPPLYCHAINIQ_COCO.ONTOLOGY.RELATIONSHIP_GOVERNANCE VALUES
     ('SUPPLIER',           'PROVIDES',     'SHIPMENT',   'VENDOR_NAME',        'VENDOR',             'SUPPORTED',   'SCMS source attribute',                     'SCMS internal join'),
     ('MANUFACTURING_SITE', 'PRODUCES_FOR', 'SHIPMENT',   'SITE_NAME',          'MANUFACTURING_SITE', 'SUPPORTED',   'SCMS source attribute',                     'SCMS internal join'),
     ('SHIPMENT',           'DESTINED_FOR', 'GEOGRAPHY',  'COUNTRY',            'COUNTRY_NAME',       'SUPPORTED',   'SCMS country attribute',                    'SCMS to conformed geography'),
-    ('ORDER',              'LOCATED_IN',   'GEOGRAPHY',  'ORDER_COUNTRY',      'COUNTRY_NAME',       'SUPPORTED',   'DataCo order country attribute',            'DataCo to conformed geography'),
+    ('ORDER',              'LOCATED_IN',   'GEOGRAPHY',  'CANONICAL_COUNTRY',  'COUNTRY_NAME',       'SUPPORTED',   'DataCo normalized country name',            'DataCo to conformed geography via CANONICAL_COUNTRY'),
     ('ORDER_ITEM',         'HAS_DELIVERY', 'ORDER_ITEM', 'ORDER_ITEM_ID',      'ORDER_ITEM_ID',      'SUPPORTED',   'Delivery is an attribute of the order item','Same grain - no join needed'),
     ('SHIPMENT',           'HAS_LOGISTICS','LOGISTICS',  NULL,                 NULL,                 'SUPPORTED',   'Same SCMS grain - no cross-table join',     'Logistics is a projection of SCMS_SHIPMENT_FACT'),
     -- UNSUPPORTED relationships (no defensible key)

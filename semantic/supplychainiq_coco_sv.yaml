@@ -70,7 +70,11 @@ tables:
         data_type: TEXT
       - name: ORDER_COUNTRY
         expr: ORDER_COUNTRY
-        description: Destination country for the order
+        description: Original destination country name (Spanish for DataCo)
+        data_type: TEXT
+      - name: CANONICAL_COUNTRY
+        expr: CANONICAL_COUNTRY
+        description: Normalized English country name for cross-source comparison
         data_type: TEXT
       - name: ORDER_REGION
         expr: ORDER_REGION
@@ -476,7 +480,7 @@ relationships:
     left_table: ORDER_ITEM_FACT
     right_table: GEOGRAPHY_DIM
     relationship_columns:
-      - left_column: ORDER_COUNTRY
+      - left_column: CANONICAL_COUNTRY
         right_column: COUNTRY_NAME
     join_type: many_to_one
     relationship_type: many_to_one
@@ -492,7 +496,7 @@ relationships:
 verified_queries:
   - name: "Enterprise On-Time Delivery Rate"
     question: "What is our overall on-time delivery percentage?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT ROUND(100.0 * COUNT_IF(DELIVERY_STATUS IN ('Advance shipping','Shipping on time'))
@@ -500,7 +504,7 @@ verified_queries:
       FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
   - name: "Enterprise Delay Rate"
     question: "What is our delivery delay rate?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT ROUND(100.0 * COUNT_IF(DELIVERY_STATUS = 'Late delivery')
@@ -508,7 +512,7 @@ verified_queries:
       FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
   - name: "Enterprise Sales and Profit"
     question: "What are total sales and profit?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT ROUND(SUM(SALES), 2) AS TOTAL_SALES, ROUND(SUM(ORDER_PROFIT_PER_ORDER), 2) AS TOTAL_PROFIT,
@@ -516,14 +520,14 @@ verified_queries:
       FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
   - name: "Enterprise Logistics Cost Rate"
     question: "What is our overall logistics cost rate?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT ROUND(100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0), 2) AS LOGISTICS_COST_RATE_PCT
       FROM SUPPLYCHAINIQ_COCO.CORE.SCMS_SHIPMENT_FACT
   - name: "Country with Highest Logistics Cost Rate"
     question: "Which country has the highest logistics cost rate?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT COUNTRY, ROUND(100.0 * SUM(FREIGHT_COST_USD) / NULLIF(SUM(LINE_ITEM_VALUE), 0), 2) AS LOGISTICS_COST_RATE_PCT
@@ -531,17 +535,17 @@ verified_queries:
       GROUP BY COUNTRY ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5
   - name: "Top 5 Countries by Delivery Delay Rate"
     question: "Which countries have the worst delivery delay rates?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
-      SELECT ORDER_COUNTRY AS COUNTRY,
+      SELECT CANONICAL_COUNTRY AS COUNTRY,
         ROUND(100.0 * COUNT_IF(DELIVERY_STATUS = 'Late delivery')
           / NULLIF(COUNT_IF(DELIVERY_STATUS != 'Shipping canceled'), 0), 2) AS DELAY_RATE_PCT
       FROM SUPPLYCHAINIQ_COCO.CORE.ORDER_ITEM_FACT
-      GROUP BY ORDER_COUNTRY ORDER BY DELAY_RATE_PCT DESC LIMIT 5
+      GROUP BY CANONICAL_COUNTRY ORDER BY DELAY_RATE_PCT DESC LIMIT 5
   - name: "Delivery Performance by Shipping Mode"
     question: "What is the on-time delivery rate by shipping mode?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT SHIPPING_MODE,
@@ -551,7 +555,7 @@ verified_queries:
       GROUP BY SHIPPING_MODE ORDER BY ON_TIME_DELIVERY_PCT DESC
   - name: "Top 10 Suppliers by Freight Cost"
     question: "Which suppliers have the highest freight costs?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT VENDOR AS SUPPLIER, ROUND(SUM(FREIGHT_COST_USD), 2) AS TOTAL_FREIGHT_COST,
@@ -561,7 +565,7 @@ verified_queries:
       GROUP BY VENDOR ORDER BY TOTAL_FREIGHT_COST DESC LIMIT 10
   - name: "Monthly Sales Trend"
     question: "Show monthly sales trend"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT DATE_TRUNC('MONTH', ORDER_DATE)::DATE AS MONTH_START,
@@ -570,7 +574,7 @@ verified_queries:
       GROUP BY MONTH_START ORDER BY MONTH_START
   - name: "Customer Segment Performance"
     question: "How do customer segments compare on sales and profit?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT c.CUSTOMER_SEGMENT,
@@ -582,7 +586,7 @@ verified_queries:
       GROUP BY c.CUSTOMER_SEGMENT ORDER BY TOTAL_SALES DESC
   - name: "Product Category Sales"
     question: "What are the sales by product category?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT CATEGORY_NAME, ROUND(SUM(SALES), 2) AS TOTAL_SALES,
@@ -591,7 +595,7 @@ verified_queries:
       GROUP BY CATEGORY_NAME ORDER BY TOTAL_SALES DESC
   - name: "Shipment Count by Country"
     question: "How many shipments per country?"
-    verified_at: "2026-10-02"
+    verified_at: 1791072000
     verified_by: "CoCo"
     sql: >
       SELECT COUNTRY, COUNT(*) AS SHIPMENT_COUNT, ROUND(SUM(LINE_ITEM_VALUE), 2) AS TOTAL_VALUE

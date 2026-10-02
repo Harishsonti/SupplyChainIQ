@@ -783,12 +783,10 @@ with st.sidebar:
     st.markdown('<div class="sidebar-heading">Trust Contract</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div style="font-size:0.78rem;color:var(--text-2);line-height:1.6;">'
-        f'<strong>{grand_total_tests}</strong> total evaluation artifacts<br>'
-        f'<strong>{total_smoke}</strong> semantic smoke tests<br>'
-        f'<strong>{total_red_team}</strong> agent red team cases ({red_team_runs} runs)<br>'
-        f'<strong>{total_provenance_tests}</strong> provenance resolution tests<br>'
-        f'<strong>5</strong> OTD variant definitions<br>'
-        f'<strong>14</strong> metric readiness assessments'
+        f'<strong>{grand_total_tests}</strong> executable test cases<br>'
+        f'&nbsp;&nbsp;{total_smoke} smoke &middot; {total_red_team} red team &middot; {total_provenance_tests} provenance<br>'
+        f'<strong>19</strong> governance registry entries<br>'
+        f'&nbsp;&nbsp;5 OTD variants &middot; 14 readiness assessments'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1681,7 +1679,7 @@ with disagree_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with eval_tab:
 
-    _h26 = f'<div class="hero"> <div class="hero-title">Evaluation &amp; Trust Contract</div> <div class="hero-copy"> Comprehensive evaluation suite: semantic smoke tests, agent red team, provenance resolution, and benchmark results. {grand_total_tests} evaluation artifacts &middot; {total_tests} smoke tests &middot; {total_red_team} red team cases &middot; {total_provenance_tests} provenance tests. </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Smoke Tests</div> <div class="value">{total_smoke}</div> <div class="note">{smoke_passed} passed</div> </div> <div class="hero-kpi"> <div class="label">Red Team</div> <div class="value">{total_red_team}</div> <div class="note">{red_team_passed} passed &middot; {red_team_runs} runs</div> </div> <div class="hero-kpi"> <div class="label">Provenance</div> <div class="value">{total_provenance_tests}</div> <div class="note">Resolution tests</div> </div> <div class="hero-kpi"> <div class="label">Smoke Pass Rate</div> <div class="value">{pass_rate:.1f}%</div> <div class="note">Overall</div> </div> </div> </div>'
+    _h26 = f'<div class="hero"> <div class="hero-title">Evaluation &amp; Trust Contract</div> <div class="hero-copy"> {grand_total_tests} executable test cases across smoke, red team, and provenance suites, plus 19 governance registry entries (OTD variants, readiness assessments). </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Smoke Tests</div> <div class="value">{total_smoke}</div> <div class="note">{smoke_passed} passed</div> </div> <div class="hero-kpi"> <div class="label">Red Team</div> <div class="value">{total_red_team}</div> <div class="note">{red_team_passed} passed &middot; {red_team_runs} runs</div> </div> <div class="hero-kpi"> <div class="label">Provenance</div> <div class="value">{total_provenance_tests}</div> <div class="note">Resolution tests</div> </div> <div class="hero-kpi"> <div class="label">Smoke Pass Rate</div> <div class="value">{pass_rate:.1f}%</div> <div class="note">Overall</div> </div> </div> </div>'
     st.markdown(_h26, unsafe_allow_html=True)
 
     eval_overview, eval_smoke, eval_redteam, eval_provenance, eval_bench, eval_detail = st.tabs([

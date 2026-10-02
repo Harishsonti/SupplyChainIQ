@@ -1,7 +1,7 @@
 import streamlit as st
-from snowflake.snowpark.context import get_active_session
-from snowflake.cortex import data_agent_run
 import json
+from snowflake.snowpark.context import get_active_session
+from provenance import parse_agent_response, build_provenance, render_provenance_card
 
 session = get_active_session()
 
@@ -14,6 +14,8 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg["role"] == "assistant" and msg.get("provenance"):
+            render_provenance_card(msg["provenance"])
 
 if prompt := st.chat_input("Ask about supply chain performance..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -23,27 +25,27 @@ if prompt := st.chat_input("Ask about supply chain performance..."):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                result = data_agent_run(
-                    agent_name="SUPPLYCHAINIQ_COCO.APP.SUPPLYCHAINIQ_COCO_AGENT",
-                    user_message=prompt,
-                    session=session
-                )
-                response_text = ""
-                if isinstance(result, dict):
-                    messages = result.get("messages", [])
-                    for m in messages:
-                        if m.get("role") == "assistant":
-                            response_text += m.get("content", "")
-                elif isinstance(result, str):
-                    response_text = result
-                else:
-                    response_text = str(result)
+                req_body = json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}]})
+                result_raw = session.sql(
+                    f"SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN("
+                    f"'SUPPLYCHAINIQ_COCO.APP.SUPPLYCHAINIQ_COCO_AGENT', $${req_body}$$)"
+                ).collect()[0][0]
 
+                prov_parsed = parse_agent_response(result_raw)
+                response_text = prov_parsed.get("text", "")
                 if not response_text:
                     response_text = "No response generated."
 
+                prov_obj = build_provenance(prov_parsed, session)
+
                 st.markdown(response_text)
-                st.session_state.messages.append({"role": "assistant", "content": response_text})
+                render_provenance_card(prov_obj)
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response_text,
+                    "provenance": prov_obj,
+                })
             except Exception as e:
                 error_msg = f"Error: {str(e)}"
                 st.error(error_msg)

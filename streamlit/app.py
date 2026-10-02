@@ -3,6 +3,9 @@ import json as _json
 import html as _html
 import decimal as _decimal
 from snowflake.snowpark.context import get_active_session
+from provenance import parse_agent_response, build_provenance, render_provenance_card
+from disagreement import render_disagreement_detector
+from readiness import render_readiness_scorecard
 
 session = get_active_session()
 
@@ -770,7 +773,7 @@ with st.sidebar:
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tower_tab, signals_tab, country_tab, supplier_tab, trends_tab, analyst_tab, gov_tab, eval_tab = st.tabs([
+tower_tab, signals_tab, country_tab, supplier_tab, trends_tab, analyst_tab, gov_tab, disagree_tab, eval_tab = st.tabs([
     "Control Tower",
     "Decision Signals",
     "Country Intel",
@@ -778,6 +781,7 @@ tower_tab, signals_tab, country_tab, supplier_tab, trends_tab, analyst_tab, gov_
     "Trends",
     "Analyst",
     "Governance",
+    "Disagreement",
     "Evaluation",
 ])
 
@@ -1384,7 +1388,7 @@ with analyst_tab:
         st.session_state["cur_q"] = ""
         st.session_state["cur_a"] = ""
         st.session_state["agent_busy"] = False
-    for k, d in [("cur_q", ""), ("cur_a", ""), ("agent_busy", False)]:
+    for k, d in [("cur_q", ""), ("cur_a", ""), ("agent_busy", False), ("cur_prov", None)]:
         if k not in st.session_state:
             st.session_state[k] = d
 
@@ -1420,19 +1424,15 @@ with analyst_tab:
         try:
             req_body = _json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": st.session_state.cur_q}]}]})
             result_raw = session.sql(f"SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN('SUPPLYCHAINIQ_COCO.APP.SUPPLYCHAINIQ_COCO_AGENT', $${req_body}$$)").collect()[0][0]
-            result = _json.loads(result_raw)
-            response_text = ""
-            if isinstance(result, dict) and "content" in result:
-                for block in result["content"]:
-                    if block.get("type") == "text":
-                        response_text += block.get("text", "")
-            elif isinstance(result, str):
-                response_text = result
+            prov_parsed = parse_agent_response(result_raw)
+            response_text = prov_parsed.get("text", "")
             if not response_text:
                 response_text = "The agent returned an empty response."
             st.session_state.cur_a = response_text
+            st.session_state.cur_prov = build_provenance(prov_parsed, session)
         except Exception as e:
             st.session_state.cur_a = f"Agent error: {str(e)}"
+            st.session_state.cur_prov = None
         st.session_state.agent_busy = False
         if hasattr(st, 'rerun'):
             st.rerun()
@@ -1446,14 +1446,19 @@ with analyst_tab:
         if st.session_state.cur_a:
             a_html = f'<div class="ax-agent"><div class="ax-agent-label">SupplyChainIQ Agent</div><div class="ax-agent-body">{_html.escape(st.session_state.cur_a)}</div></div>'
             st.markdown(a_html, unsafe_allow_html=True)
-            with st.expander("Governance & Sources"):
-                st.markdown("**Semantic layer:** SUPPLYCHAINIQ_COCO_SV  \n**Agent:** SUPPLYCHAINIQ_COCO_AGENT  \n**Constraints:** Governed metric formulas, two-island constraint, outlier inclusion, source attribution, non-computable metric refusal.")
+            prov_obj = st.session_state.get("cur_prov")
+            if prov_obj:
+                render_provenance_card(prov_obj)
+            else:
+                with st.expander("Governance & Sources"):
+                    st.markdown("**Semantic layer:** SUPPLYCHAINIQ_COCO_SV  \n**Agent:** SUPPLYCHAINIQ_COCO_AGENT  \n**Constraints:** Governed metric formulas, two-island constraint, outlier inclusion, source attribution, non-computable metric refusal.")
 
     # ── Footer: clear + branding ──────────────────────────────────────────
     if st.session_state.cur_q:
         if st.button("Clear", key="clear_hist"):
             st.session_state.cur_q = ""
             st.session_state.cur_a = ""
+            st.session_state.cur_prov = None
             if hasattr(st, 'rerun'):
                 st.rerun()
             elif hasattr(st, 'experimental_rerun'):
@@ -1592,6 +1597,9 @@ with gov_tab:
     _h25 = f'<div class="card card-severity-warning"> <div class="card-title">Outlier Inclusion Policy</div> <div class="card-body"> The SupplyChainIQ governance framework requires that <strong>all data points be included</strong> in analyses, even statistical outliers. Specifically:<br><br> &bull; <strong>Belize</strong> ({belize_rate:.0f}% logistics cost rate) must always be included in country-level analyses and surfaced explicitly to users<br> &bull; No data point may be silently excluded based on its being an outlier<br> &bull; The agent is trained to present outliers with context rather than filtering them out<br> &bull; Users can filter outliers themselves but the system must not do so automatically<br><br> This policy ensures transparency and prevents data manipulation through selective exclusion. </div> <div class="card-source">Governance: Outlier Inclusion Policy &middot; Enforced by agent + semantic layer</div> </div>'
     st.markdown(_h25, unsafe_allow_html=True)
 
+    # ── Data Readiness Scorecard ──────────────────────────────────────────────
+    render_readiness_scorecard(session, render_section, render_beige_board)
+
     # ── Product & Shipping Analytics ──────────────────────────────────────────
     render_section("Product & Shipping Analytics")
 
@@ -1635,7 +1643,14 @@ with gov_tab:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 8 — EVALUATION
+# TAB 8 — METRIC DISAGREEMENT DETECTOR
+# ══════════════════════════════════════════════════════════════════════════════
+with disagree_tab:
+    render_disagreement_detector(session, render_section, render_beige_board)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 9 — EVALUATION
 # ══════════════════════════════════════════════════════════════════════════════
 with eval_tab:
 

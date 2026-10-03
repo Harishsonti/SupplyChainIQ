@@ -1826,6 +1826,7 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
         # ── Governed metric card ──
         if governed_metrics:
+            _any_dataco_metric = False
             for m in governed_metrics:
                 mid = _html.escape(m.get("METRIC_ID", ""))
                 mname = _html.escape(m.get("METRIC_NAME", ""))
@@ -1843,9 +1844,8 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     else:
                         dq_text = f'{rdns.get("READINESS_STATUS", "")} \u00b7 {rdns.get("BLOCKING_REASON", "")}'
 
-                src_note = ""
                 if msrc == "DataCo":
-                    src_note = '<div style="font-size:.68rem;color:var(--muted);margin-top:4px;">SCMS shipment data is maintained as a separate source island and does not contribute to this metric.</div>'
+                    _any_dataco_metric = True
 
                 res_methods = prov_obj.get("provenance_resolution_method", [])
                 res_display = []
@@ -1868,7 +1868,6 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     f'{msrc} \u00b7 {mgrain} \u00b7 Governed<br>'
                     f'{_html.escape(mdefn)}'
                     f'</div>'
-                    f'{src_note}'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
@@ -1880,6 +1879,12 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     f'<strong>Resolution:</strong> {_html.escape(res_label)}<br>'
                     f'<strong>Data quality:</strong> {_html.escape(dq_text)}'
                     f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            if _any_dataco_metric:
+                st.markdown(
+                    '<div style="font-size:.68rem;color:var(--muted);margin-top:4px;margin-bottom:8px;">SCMS shipment data is maintained as a separate source island and does not contribute to DataCo-sourced metrics.</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -1897,8 +1902,8 @@ button[data-baseweb="tab"][aria-selected="true"] {
         _q_has_join = any(t in _q_lower for t in _join_terms)
         _q_cross_join = _q_has_dataco and _q_has_scms and _q_has_join
         _answer_refuses_join = ("row-level" in _a_lower and ("can't" in _a_lower or "cannot" in _a_lower or "not able" in _a_lower))
-        _is_cross_source_boundary = _q_cross_join or _answer_refuses_join
-        if prov_obj.get("cross_source_detected") or prov_obj.get("applicable_rules"):
+        _is_cross_source_boundary = (_q_cross_join or _answer_refuses_join) and not _has_sql
+        if not _has_sql and (prov_obj.get("cross_source_detected") or prov_obj.get("applicable_rules")):
             _is_cross_source_boundary = True
 
         # Question-level non-computable metric detection

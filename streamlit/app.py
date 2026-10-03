@@ -2067,13 +2067,14 @@ with gov_tab:
                     for _, _br in _blocked.iterrows():
                         _bn = _html.escape(str(_br.get("METRIC_NAME", "")))
                         _bb = _html.escape(str(_br.get("BLOCKING_REASON", "")))
-                        _bu = _html.escape(str(_br.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                        _bu_raw = _html.escape(str(_br.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                        _bu_display = _bu_raw if _bu_raw and _bu_raw != "None" else "\u2014"
                         st.markdown(
                             f'<div class="card" style="border-left:3px solid var(--amber);margin-bottom:8px;">'
                             f'<div class="card-title">{_bn}</div>'
                             f'<div class="card-body" style="font-size:0.78rem;">'
                             f'<strong>Blocked:</strong> {_bb}<br>'
-                            f'<strong>Required to unlock:</strong> {_bu if _bu and _bu != "None" else "\u2014"}'
+                            f'<strong>Required to unlock:</strong> {_bu_display}'
                             f'</div></div>',
                             unsafe_allow_html=True,
                         )

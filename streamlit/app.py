@@ -347,9 +347,9 @@ def _load_all(_session):
     d["delivery"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_DELIVERY_SCORECARD").to_pandas()
     d["logistics"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.ENTERPRISE_LOGISTICS_SCORECARD").to_pandas()
     d["country"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD ORDER BY COUNTRY").to_pandas()
-    d["risk"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC").to_pandas()
-    d["supplier"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 50").to_pandas()
-    d["site"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 50").to_pandas()
+    d["risk"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 15").to_pandas()
+    d["supplier"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
+    d["site"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
     d["monthly_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_DELIVERY_TREND ORDER BY MONTH_START").to_pandas()
     d["monthly_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_LOGISTICS_TREND ORDER BY MONTH_START").to_pandas()
     d["dq"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.DATA_QUALITY_SCORECARD").to_pandas()
@@ -357,7 +357,7 @@ def _load_all(_session):
     d["entity_cat"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_CATALOG ORDER BY SOURCE_SYSTEM, ENTITY_NAME").to_pandas()
     d["entity_rel"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_RELATIONSHIPS").to_pandas()
     d["metric_reg"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY ORDER BY METRIC_ID").to_pandas()
-    d["product"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.PRODUCT_CATEGORY_PERFORMANCE ORDER BY TOTAL_SALES DESC LIMIT 15").to_pandas()
+    d["product"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.PRODUCT_CATEGORY_PERFORMANCE ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
     d["ship_mode"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.SHIPPING_MODE_ANALYSIS ORDER BY SOURCE_SYSTEM, TOTAL_VALUE DESC").to_pandas()
     d["top_cust"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.TOP_CUSTOMERS ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
     d["eval_smoke_results"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) ORDER BY TEST_ID").to_pandas()
@@ -368,8 +368,8 @@ def _load_all(_session):
     d["red_team"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS ORDER BY RUN_ID, TEST_ID").to_pandas()
     d["red_team_summary"] = _session.sql("SELECT RUN_ID, COUNT(*) AS TOTAL_CASES, COUNT_IF(PASS_FLAG) AS PASSED, COUNT_IF(NOT PASS_FLAG) AS FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT, MIN(TESTED_AT) AS RUN_DATE FROM SUPPLYCHAINIQ_COCO.EVALUATION.RED_TEAM_RESULTS GROUP BY RUN_ID ORDER BY MIN(TESTED_AT)").to_pandas()
     d["provenance_tests"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PROVENANCE_TESTS ORDER BY TEST_ID").to_pandas()
-    d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC").to_pandas()
-    d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC").to_pandas()
+    d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC LIMIT 15").to_pandas()
+    d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC LIMIT 15").to_pandas()
     d["geo"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME").to_pandas()
     return d
 
@@ -585,7 +585,7 @@ with tower_tab:
     ])
 
     # ── Product Category Breakdown ────────────────────────────────────────────
-    render_section("Product Category Performance", chip="DataCo")
+    render_section("Top 10 Product Categories", chip="DataCo")
 
     if not product_df.empty:
         pc1, pc2, pc3 = st.columns(3)
@@ -603,33 +603,32 @@ with tower_tab:
 
         if "CATEGORY_NAME" in product_df.columns and "TOTAL_SALES" in product_df.columns:
             st.markdown('<div class="graph-board"><div class="graph-label">Sales by Product Category</div></div>', unsafe_allow_html=True)
-            chart_prod = product_df.head(15).set_index("CATEGORY_NAME")[["TOTAL_SALES"]]
+            chart_prod = product_df.head(10).set_index("CATEGORY_NAME")[["TOTAL_SALES"]]
             st.bar_chart(chart_prod)
 
     # ── Top Customers ─────────────────────────────────────────────────────────
-    render_section("Top Customers", chip="DataCo")
+    render_section("Top 10 Customers by Sales", chip="DataCo")
 
     if not top_cust_df.empty:
-        tc1, tc2 = st.columns(2)
-        tc1.metric("Customers Shown", f"{len(top_cust_df)}")
-        top_cust_sales = as_float(top_cust_df["TOTAL_SALES"].sum())
-        tc2.metric("Combined Sales", fmt_usd(top_cust_sales))
+        _cust_cols = ["CUSTOMER_FULL_NAME", "TOTAL_SALES", "TOTAL_PROFIT", "PROFIT_MARGIN_PCT"] if all(c in top_cust_df.columns for c in ["CUSTOMER_FULL_NAME", "TOTAL_SALES", "TOTAL_PROFIT", "PROFIT_MARGIN_PCT"]) else list(top_cust_df.columns)
         render_beige_board(
-            "Top 50 Customers by Sales",
-            top_cust_df,
-            subtitle="Top customers ranked by total sales — DataCo source",
-            max_rows=50,
+            "Top 10 Customers",
+            top_cust_df[_cust_cols] if _cust_cols != list(top_cust_df.columns) else top_cust_df,
+            subtitle="Ranked by total sales — DataCo source",
         )
+    else:
+        st.info("No customer data available.")
 
     # ── Shipping Mode Analysis ────────────────────────────────────────────────
     render_section("Shipping Mode Analysis", chip="Both")
 
     if not ship_mode_df.empty:
-        render_beige_board(
-            "Shipping Mode Performance",
-            ship_mode_df,
-            subtitle="Shipping mode metrics across both source systems",
-        )
+        with st.expander(f"View shipping modes ({len(ship_mode_df)})"):
+            render_beige_board(
+                "Shipping Mode Performance",
+                ship_mode_df,
+                subtitle="Shipping mode metrics across both source systems",
+            )
 
     # ── Logistics Performance ─────────────────────────────────────────────────
     render_section("Logistics Performance", chip="SCMS")
@@ -818,52 +817,33 @@ with country_tab:
         render_section("Cross-Source Country Scorecard")
 
         if not country_df.empty:
-            cov_opts = sorted(country_df["SOURCE_COVERAGE"].dropna().unique().tolist())
-            sel_cov = st.multiselect("Filter by source coverage", cov_opts, default=cov_opts, key="ctry_cov_flt")
-            filtered_cs = country_df[country_df["SOURCE_COVERAGE"].isin(sel_cov)] if sel_cov else country_df
-            st.markdown(
-                f'<div style="color:var(--muted);font-size:0.82rem;margin-bottom:8px;">{len(filtered_cs)} countries shown</div>',
-                unsafe_allow_html=True,
-            )
+            _top_cs = country_df.head(15)
             render_beige_board(
-                "Country Cross-Source Scorecard",
-                filtered_cs,
-                subtitle="DataCo columns: OTD, delay, sales, profit. SCMS columns: shipments, freight, logistics rate. NULL = no data from that source.",
+                "Top 15 Countries by Cross-Source Activity",
+                _top_cs,
+                subtitle="DataCo: OTD, delay, sales, profit. SCMS: shipments, freight, logistics rate.",
             )
+            if len(country_df) > 15:
+                with st.expander(f"View all countries ({len(country_df)})"):
+                    render_beige_board("All Countries", country_df, subtitle="Full cross-source scorecard")
 
-        render_section("Country Delivery Scorecard", chip="DataCo")
+        render_section("Top Countries — Delivery", chip="DataCo")
 
         if not country_del_df.empty:
-            cd1, cd2, cd3 = st.columns(3)
-            cd1.metric("Countries (DataCo)", f"{len(country_del_df)}")
-            total_del_orders = as_float(country_del_df["ORDER_ITEM_COUNT"].sum())
-            cd2.metric("Total Order Items", f"{total_del_orders:,.0f}")
-            if "TOTAL_SALES" in country_del_df.columns:
-                total_del_sales = as_float(country_del_df["TOTAL_SALES"].sum())
-                cd3.metric("Total Sales", fmt_usd(total_del_sales))
+            render_beige_board(
+                "Delivery by Country",
+                country_del_df,
+                subtitle=f"Top {len(country_del_df)} by order volume — DataCo source",
+            )
 
-        render_beige_board(
-            "Delivery by Country",
-            country_del_df,
-            subtitle="Order items, OTD, delay rate, sales, profit by country — DataCo source",
-        )
-
-        render_section("Country Logistics Scorecard", chip="SCMS")
+        render_section("Top Countries — Logistics", chip="SCMS")
 
         if not country_log_df.empty:
-            cl1, cl2, cl3 = st.columns(3)
-            cl1.metric("Countries (SCMS)", f"{len(country_log_df)}")
-            total_log_shipments = as_float(country_log_df["SHIPMENT_COUNT"].sum())
-            cl2.metric("Total Shipments", f"{total_log_shipments:,.0f}")
-            if "FREIGHT_COST_USD" in country_log_df.columns:
-                total_log_freight = as_float(country_log_df["FREIGHT_COST_USD"].sum())
-                cl3.metric("Total Freight", fmt_usd(total_log_freight))
-
-        render_beige_board(
-            "Logistics by Country",
-            country_log_df,
-            subtitle="Shipments, freight, logistics cost rate by country — SCMS source",
-        )
+            render_beige_board(
+                "Logistics by Country",
+                country_log_df,
+                subtitle=f"Top {len(country_log_df)} by shipment volume — SCMS source",
+            )
 
     # ── Risk Assessment ───────────────────────────────────────────────────────
     with sub_risk:
@@ -930,81 +910,45 @@ with supplier_tab:
 
     # ── Supplier Scorecard ────────────────────────────────────────────────────
     with sub_sup:
-        render_section("Supplier Scorecard", chip="SCMS")
+        render_section("Top 10 Suppliers", chip="SCMS")
 
         if not supplier_df.empty:
-            top_n_sup = st.slider(
-                "Suppliers to display", 5, max(supplier_count, 5), min(20, supplier_count), key="sup_slider"
-            )
-            shown_sup = supplier_df.head(top_n_sup)
-
-            sm1, sm2, sm3, sm4 = st.columns(4)
-            sm1.metric("Total Suppliers", f"{supplier_count}")
+            sm1, sm2, sm3 = st.columns(3)
+            sm1.metric("Suppliers Shown", f"{len(supplier_df)}")
             sm2.metric("Total Shipment Value", fmt_usd(as_float(supplier_df["SHIPMENT_VALUE_USD"].sum())))
-            sm3.metric("Total Freight Cost", fmt_usd(as_float(supplier_df["FREIGHT_COST_USD"].sum())))
-            sm4.metric("Avg Logistics Rate", fmt_pct(as_float(supplier_df["LOGISTICS_COST_RATE_PCT"].mean())))
-
-            render_kpi_strip([
-                ("Suppliers", f"{supplier_count}"),
-                ("Shipment Value", fmt_usd(as_float(supplier_df["SHIPMENT_VALUE_USD"].sum()))),
-                ("Freight Cost", fmt_usd(as_float(supplier_df["FREIGHT_COST_USD"].sum()))),
-                ("Avg Logistics Rate", fmt_pct(as_float(supplier_df["LOGISTICS_COST_RATE_PCT"].mean()))),
-            ])
+            sm3.metric("Avg Logistics Rate", fmt_pct(as_float(supplier_df["LOGISTICS_COST_RATE_PCT"].mean())))
 
             render_beige_board(
                 "Supplier Performance",
-                shown_sup,
-                subtitle=f"Top {top_n_sup} suppliers by shipment value",
+                supplier_df,
+                subtitle="Top 10 suppliers by shipment value — SCMS source",
             )
 
             st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Suppliers by Shipment Value</div></div>', unsafe_allow_html=True)
             chart_sup = supplier_df.head(10).set_index("SUPPLIER")[["SHIPMENT_VALUE_USD"]]
             st.bar_chart(chart_sup)
-
-            if "LOGISTICS_COST_RATE_PCT" in supplier_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Suppliers by Logistics Cost Rate</div></div>', unsafe_allow_html=True)
-                top_rate_sup = supplier_df.nlargest(10, "LOGISTICS_COST_RATE_PCT").set_index("SUPPLIER")[["LOGISTICS_COST_RATE_PCT"]]
-                st.bar_chart(top_rate_sup)
         else:
             st.info("No supplier data available.")
 
     # ── Manufacturing Sites ───────────────────────────────────────────────────
     with sub_site:
-        render_section("Manufacturing Site Scorecard", chip="SCMS")
+        render_section("Top 10 Manufacturing Sites", chip="SCMS")
 
         if not site_df.empty:
-            top_n_site = st.slider(
-                "Sites to display", 5, max(site_count, 5), min(20, site_count), key="site_slider"
-            )
-            shown_site = site_df.head(top_n_site)
-
-            si1, si2, si3, si4 = st.columns(4)
-            si1.metric("Total Sites", f"{site_count}")
+            si1, si2, si3 = st.columns(3)
+            si1.metric("Sites Shown", f"{len(site_df)}")
             si2.metric("Total Shipment Value", fmt_usd(as_float(site_df["SHIPMENT_VALUE_USD"].sum())))
-            si3.metric("Total Freight Cost", fmt_usd(as_float(site_df["FREIGHT_COST_USD"].sum())))
-            si4.metric("Avg Logistics Rate", fmt_pct(as_float(site_df["LOGISTICS_COST_RATE_PCT"].mean())))
-
-            render_kpi_strip([
-                ("Sites", f"{site_count}"),
-                ("Shipment Value", fmt_usd(as_float(site_df["SHIPMENT_VALUE_USD"].sum()))),
-                ("Freight Cost", fmt_usd(as_float(site_df["FREIGHT_COST_USD"].sum()))),
-                ("Avg Logistics Rate", fmt_pct(as_float(site_df["LOGISTICS_COST_RATE_PCT"].mean()))),
-            ])
+            si3.metric("Avg Logistics Rate", fmt_pct(as_float(site_df["LOGISTICS_COST_RATE_PCT"].mean())))
 
             render_beige_board(
                 "Manufacturing Site Performance",
-                shown_site,
-                subtitle=f"Top {top_n_site} sites by shipment value",
+                site_df,
+                subtitle="Top 10 sites by shipment value — SCMS source",
             )
 
             st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Sites by Shipment Value</div></div>', unsafe_allow_html=True)
             chart_site = site_df.head(10).set_index("SITE_NAME")[["SHIPMENT_VALUE_USD"]]
             st.bar_chart(chart_site)
-
-            if "LOGISTICS_COST_RATE_PCT" in site_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Sites by Logistics Cost Rate</div></div>', unsafe_allow_html=True)
-                top_rate_site = site_df.nlargest(10, "LOGISTICS_COST_RATE_PCT").set_index("SITE_NAME")[["LOGISTICS_COST_RATE_PCT"]]
-                st.bar_chart(top_rate_site)
         else:
             st.info("No site data available.")
 
@@ -1046,11 +990,12 @@ with trends_tab:
                 st.markdown('<div class="graph-board"><div class="graph-label">Average Delivery Delay (Days)</div></div>', unsafe_allow_html=True)
                 st.line_chart(monthly_del_df.set_index("MONTH_START")[["AVG_DELIVERY_DELAY_DAYS"]], height=260)
 
-            render_beige_board(
-                "Delivery Trend Data",
-                monthly_del_df,
-                subtitle="Monthly delivery metrics — DataCo source",
-            )
+            with st.expander(f"View delivery trend data ({len(monthly_del_df)} months)"):
+                render_beige_board(
+                    "Delivery Trend Data",
+                    monthly_del_df,
+                    subtitle="Monthly delivery metrics — DataCo source",
+                )
         else:
             st.info("No delivery trend data available.")
 
@@ -1082,11 +1027,12 @@ with trends_tab:
                 st.markdown('<div class="graph-board"><div class="graph-label">Monthly Profit Margin %</div></div>', unsafe_allow_html=True)
                 st.line_chart(monthly_del_df.set_index("MONTH_START")[["PROFIT_MARGIN_PCT"]], height=260)
 
-            render_beige_board(
-                "Commercial Trend Data",
-                monthly_del_df,
-                subtitle="Monthly commercial metrics — DataCo source",
-            )
+            with st.expander(f"View commercial trend data ({len(monthly_del_df)} months)"):
+                render_beige_board(
+                    "Commercial Trend Data",
+                    monthly_del_df,
+                    subtitle="Monthly commercial metrics — DataCo source",
+                )
         else:
             st.info("No commercial trend data available.")
 
@@ -1120,11 +1066,12 @@ with trends_tab:
                 st.markdown('<div class="graph-board"><div class="graph-label">Shipment Value (USD)</div></div>', unsafe_allow_html=True)
                 st.bar_chart(monthly_log_df.set_index("MONTH_START")[["SHIPMENT_VALUE_USD"]], height=260)
 
-            render_beige_board(
-                "Logistics Trend Data",
-                monthly_log_df,
-                subtitle="Monthly logistics metrics — SCMS source",
-            )
+            with st.expander(f"View logistics trend data ({len(monthly_log_df)} months)"):
+                render_beige_board(
+                    "Logistics Trend Data",
+                    monthly_log_df,
+                    subtitle="Monthly logistics metrics — SCMS source",
+                )
         else:
             st.info("No logistics trend data available.")
 
@@ -1591,47 +1538,6 @@ with gov_tab:
     # ── Data Readiness Scorecard ──────────────────────────────────────────────
     render_readiness_scorecard(session, render_section, render_beige_board)
 
-    # ── Product & Shipping Analytics ──────────────────────────────────────────
-    render_section("Product & Shipping Analytics")
-
-    prod_ship_sub1, prod_ship_sub2 = st.tabs(["Product Categories", "Shipping Modes"])
-
-    with prod_ship_sub1:
-        if not product_df.empty:
-            render_beige_board(
-                "Product Category Performance",
-                product_df,
-                subtitle="Sales, profit, and order volume by product category — DataCo source",
-            )
-            if "CATEGORY_NAME" in product_df.columns and "TOTAL_SALES" in product_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Sales by Product Category</div></div>', unsafe_allow_html=True)
-                st.bar_chart(product_df.head(15).set_index("CATEGORY_NAME")[["TOTAL_SALES"]])
-        else:
-            st.info("No product category data available.")
-
-    with prod_ship_sub2:
-        if not ship_mode_df.empty:
-            render_beige_board(
-                "Shipping Mode Analysis",
-                ship_mode_df,
-                subtitle="Shipping mode performance across source systems",
-            )
-        else:
-            st.info("No shipping mode data available.")
-
-    # ── Top Customers ─────────────────────────────────────────────────────────
-    render_section("Top Customers", chip="DataCo")
-
-    if not top_cust_df.empty:
-        render_beige_board(
-            "Top 50 Customers by Sales",
-            top_cust_df,
-            subtitle="Top customers ranked by total sales — DataCo source",
-            max_rows=50,
-        )
-    else:
-        st.info("No customer data available.")
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 8 — METRIC DISAGREEMENT DETECTOR
@@ -1903,31 +1809,25 @@ with eval_tab:
     with eval_detail:
         render_section("Detailed Test Results")
 
-        detail_sub1, detail_sub2 = st.tabs(["Smoke Details", "Benchmark Details"])
-
-        with detail_sub1:
-            if not eval_smoke_results.empty:
-                st.metric("Total Smoke Records", f"{len(eval_smoke_results)}")
+        if not eval_smoke_results.empty:
+            with st.expander(f"View all smoke test details ({len(eval_smoke_results)})"):
                 render_beige_board(
-                    "All Smoke Test Details",
+                    "Smoke Test Details",
                     eval_smoke_results,
-                    subtitle="Complete smoke test results with test IDs, queries, and outcomes",
-                    max_rows=200,
+                    subtitle="Complete smoke test results",
                 )
-            else:
-                st.info("No smoke test details available.")
+        else:
+            st.info("No smoke test details available.")
 
-        with detail_sub2:
-            if not eval_bench_results.empty:
-                st.metric("Total Benchmark Records", f"{len(eval_bench_results)}")
+        if not eval_bench_results.empty:
+            with st.expander(f"View benchmark details ({len(eval_bench_results)})"):
                 render_beige_board(
-                    "All Benchmark Details",
+                    "Benchmark Details",
                     eval_bench_results,
-                    subtitle="Complete benchmark results with test IDs, categories, and outcomes",
-                    max_rows=200,
+                    subtitle="Benchmark execution details",
                 )
-            else:
-                st.info("No benchmark details available.")
+        else:
+            st.info("No benchmark details available.")
 
         # Test health summary
         render_section("Test Health Summary")

@@ -2146,70 +2146,106 @@ with gov_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with trust_tab:
 
-    _h_trust = '<div class="hero"> <div class="hero-title">Trust</div> <div class="hero-copy"> Governed metric definitions, cross-persona consistency, data readiness, and adversarial test coverage. </div> </div>'
-    st.markdown(_h_trust, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Trust</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:16px;">'
+        'Evidence that the governed definition, data boundaries and Agent behavior remain aligned.</div>',
+        unsafe_allow_html=True,
+    )
 
-    # ── Metric Disagreement ──────────────────────────────────────────────────
-    render_section("Metric Disagreement", chip="OTD Variants")
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 1 — SAME METRIC, DIFFERENT NUMBERS
+    # ══════════════════════════════════════════════════════════════════════════
+    render_section("Same English metric, different numbers")
 
     if not otd_variants_df.empty:
-        governed_row = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] == "GOVERNED"]
-        governed_val = as_float(governed_row.iloc[0]["COMPUTED_VALUE"]) if not governed_row.empty else 0
-        alt_variants = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] != "GOVERNED"]
-        if not alt_variants.empty and "DEVIATION_PCT" in alt_variants.columns:
-            max_dev_row = alt_variants.loc[alt_variants["DEVIATION_PCT"].abs().idxmax()]
-            alt_val = as_float(max_dev_row["COMPUTED_VALUE"])
-            st.markdown(
-                f'<div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px;">'
-                f'Same English metric, different numbers: {governed_val:.1f}% vs {alt_val:.1f}%.</div>',
-                unsafe_allow_html=True,
-            )
+        _tv_gov = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] == "GOVERNED"]
+        _tv_gov_val = as_float(_tv_gov.iloc[0]["COMPUTED_VALUE"]) if not _tv_gov.empty else 0
+        _tv_alts = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] != "GOVERNED"]
+        _tv_max_div = _tv_alts.loc[_tv_alts["DEVIATION_FROM_GOVERNED"].abs().idxmax()] if not _tv_alts.empty else None
+        _tv_max_val = as_float(_tv_max_div["COMPUTED_VALUE"]) if _tv_max_div is not None else _tv_gov_val
+        st.markdown(
+            f'<div style="font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:10px;">'
+            f'On-time delivery is {_tv_gov_val:.1f}% or {_tv_max_val:.1f}%, depending on the definition.</div>',
+            unsafe_allow_html=True,
+        )
 
-        _altair_ok = False
+        # Altair chart: 0-100 axis, dynamic color by agreement
+        _tv_chart_ok = False
         try:
             import altair as alt
-            chart_df = otd_variants_df[["VARIANT_NAME", "COMPUTED_VALUE", "GOVERNANCE_STATUS"]].copy()
-            chart_df["is_governed"] = chart_df["GOVERNANCE_STATUS"] == "GOVERNED"
-            bars = alt.Chart(chart_df).mark_bar(cornerRadiusEnd=3).encode(
-                y=alt.Y("VARIANT_NAME:N", sort="-x", title=None, axis=alt.Axis(labelLimit=280)),
-                x=alt.X("COMPUTED_VALUE:Q", title="OTD %", scale=alt.Scale(domain=[0, 50])),
-                color=alt.condition(alt.datum.is_governed, alt.value("#3FB8A0"), alt.value("#6B7782")),
+            _tv_df = otd_variants_df[["VARIANT_NAME", "COMPUTED_VALUE", "GOVERNANCE_STATUS", "DEVIATION_FROM_GOVERNED"]].copy()
+            _agree_threshold = 0.05
+            def _tv_color(row):
+                if row["GOVERNANCE_STATUS"] == "GOVERNED":
+                    return "governed"
+                elif abs(as_float(row["DEVIATION_FROM_GOVERNED"])) <= _agree_threshold:
+                    return "agrees"
+                else:
+                    return "diverges"
+            _tv_df["_color_cat"] = _tv_df.apply(_tv_color, axis=1)
+            _tv_cscale = alt.Scale(domain=["governed", "agrees", "diverges"], range=["#3FB8A0", "#2A8A78", "#D9A441"])
+            _tv_bars = alt.Chart(_tv_df).mark_bar(cornerRadiusEnd=3).encode(
+                y=alt.Y("VARIANT_NAME:N", sort="-x", title=None, axis=alt.Axis(labelLimit=260)),
+                x=alt.X("COMPUTED_VALUE:Q", title="OTD %", scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color("_color_cat:N", scale=_tv_cscale, legend=None),
                 tooltip=["VARIANT_NAME:N", alt.Tooltip("COMPUTED_VALUE:Q", format=".2f"), "GOVERNANCE_STATUS:N"],
-            ).properties(height=240)
-            text = bars.mark_text(align="left", dx=4, fontSize=11).encode(
+            ).properties(height=220)
+            _tv_text = _tv_bars.mark_text(align="left", dx=4, fontSize=11).encode(
                 text=alt.Text("COMPUTED_VALUE:Q", format=".2f"),
                 color=alt.value("#E6EDF3"),
             )
-            st.altair_chart(bars + text, use_container_width=True)
-            _altair_ok = True
+            st.altair_chart(_tv_bars + _tv_text, use_container_width=True)
+            _tv_chart_ok = True
         except Exception:
             pass
-        if not _altair_ok:
-            _vbar_rows = ""
-            for _, vr in otd_variants_df.iterrows():
-                vname = _html.escape(str(vr.get("VARIANT_NAME", "")))
-                vval = as_float(vr.get("COMPUTED_VALUE", 0))
-                vstatus = str(vr.get("GOVERNANCE_STATUS", ""))
-                vcolor = "var(--accent)" if vstatus == "GOVERNED" else "var(--muted)"
-                pct_w = min(vval / 50 * 100, 100)
-                _vbar_rows += f'<div style="margin:4px 0;"><div style="font-size:0.72rem;color:var(--text-2);margin-bottom:2px;">{vname}</div><div style="background:var(--panel);border-radius:3px;height:22px;position:relative;"><div style="background:{vcolor};height:100%;width:{pct_w:.1f}%;border-radius:3px;"></div><span style="position:absolute;right:6px;top:2px;font-size:0.72rem;color:var(--text);">{vval:.2f}%</span></div></div>'
-            st.markdown(f'<div style="padding:8px 0;">{_vbar_rows}</div>', unsafe_allow_html=True)
+        if not _tv_chart_ok:
+            for _, _vr in otd_variants_df.iterrows():
+                _vn = _html.escape(str(_vr.get("VARIANT_NAME", "")))
+                _vv = as_float(_vr.get("COMPUTED_VALUE", 0))
+                _vs = str(_vr.get("GOVERNANCE_STATUS", ""))
+                _vdev = abs(as_float(_vr.get("DEVIATION_FROM_GOVERNED", 999)))
+                _vc = "var(--accent)" if _vs == "GOVERNED" else ("var(--accent)" if _vdev <= 0.05 else "var(--amber)")
+                _pw = min(_vv, 100)
+                st.markdown(f'<div style="margin:3px 0;"><div style="font-size:0.72rem;color:var(--text-2);">{_vn}</div><div style="background:var(--panel);border-radius:3px;height:20px;position:relative;"><div style="background:{_vc};height:100%;width:{_pw:.1f}%;border-radius:3px;"></div><span style="position:absolute;right:6px;top:1px;font-size:0.72rem;color:var(--text);">{_vv:.2f}%</span></div></div>', unsafe_allow_html=True)
 
-        v3_confirms = False
-        v5_confirms = False
-        for _, vrow in otd_variants_df.iterrows():
-            vid = str(vrow.get("VARIANT_ID", ""))
-            dev = as_float(vrow.get("DEVIATION_FROM_GOVERNED", 999))
-            if "V3" in vid and abs(dev) < 0.001:
-                v3_confirms = True
-            if "V5" in vid and abs(dev) < 0.1:
-                v5_confirms = True
-        _expl = "V1 (Governed) uses the categorical DELIVERY_STATUS field to determine on-time delivery, excluding cancelled orders."
-        if v3_confirms:
-            _expl += " V3 (Risk Flag Method) independently confirms V1 using a different field basis (LATE_DELIVERY_RISK binary flag) — exact convergence."
-        if v5_confirms:
-            _expl += " V5 (Days-Based) independently confirms V1 using numeric day comparison — divergence is only +0.01pp."
-        st.markdown(f'<div style="font-size:0.82rem;color:var(--text-2);line-height:1.5;margin:8px 0 16px;">{_expl}</div>', unsafe_allow_html=True)
+        # Three-column explainer
+        _ex1, _ex2, _ex3 = st.columns(3)
+        with _ex1:
+            _g_desc = _html.escape(str(_tv_gov.iloc[0].get("DESCRIPTION", ""))[:120]) if not _tv_gov.empty else ""
+            st.markdown(f'<div class="card" style="border-left:3px solid var(--accent);"><div class="card-title" style="font-size:0.78rem;">Governed (V1)</div><div class="card-body" style="font-size:0.72rem;">{_g_desc}</div></div>', unsafe_allow_html=True)
+        with _ex2:
+            _v4 = otd_variants_df[otd_variants_df["VARIANT_ID"].str.contains("V4", na=False)]
+            _v4_desc = _html.escape(str(_v4.iloc[0].get("DESCRIPTION", ""))[:120]) if not _v4.empty else "Strict on-time only."
+            st.markdown(f'<div class="card" style="border-left:3px solid var(--amber);"><div class="card-title" style="font-size:0.78rem;">Biggest divergence (V4)</div><div class="card-body" style="font-size:0.72rem;">{_v4_desc}</div></div>', unsafe_allow_html=True)
+        with _ex3:
+            _v3 = otd_variants_df[otd_variants_df["VARIANT_ID"].str.contains("V3", na=False)]
+            _v3_desc = "V3 and V5 independently confirm V1 from different field bases."
+            if not _v3.empty:
+                _v3_desc = _html.escape(str(_v3.iloc[0].get("DESCRIPTION", ""))[:100]) + " V5 also confirms via numeric comparison."
+            st.markdown(f'<div class="card" style="border-left:3px solid var(--accent);"><div class="card-title" style="font-size:0.78rem;">Independent confirmation (V3, V5)</div><div class="card-body" style="font-size:0.72rem;">{_v3_desc}</div></div>', unsafe_allow_html=True)
+
+        with st.expander("Variant details"):
+            for _, _vr in otd_variants_df.iterrows():
+                _vid = _html.escape(str(_vr.get("VARIANT_ID", "")))
+                _vn = _html.escape(str(_vr.get("VARIANT_NAME", "")))
+                _vgs = str(_vr.get("GOVERNANCE_STATUS", ""))
+                _vdesc = _html.escape(str(_vr.get("DESCRIPTION", "")))
+                _vnum = _html.escape(str(_vr.get("NUMERATOR_LOGIC", "")))
+                _vden = _html.escape(str(_vr.get("DENOMINATOR_TREATMENT", "")))
+                _vsql = _html.escape(str(_vr.get("SQL_EXPRESSION", "")))
+                _vmeth = _html.escape(str(_vr.get("METHODOLOGY", "")))
+                _vc = "var(--accent)" if _vgs == "GOVERNED" else "var(--muted)"
+                st.markdown(
+                    f'<div class="card" style="border-left:3px solid {_vc};margin-bottom:6px;">'
+                    f'<div class="card-title" style="font-size:0.78rem;">{_vn} <span style="color:{_vc};font-size:0.62rem;">{_vgs}</span></div>'
+                    f'<div class="card-body" style="font-size:0.72rem;">{_vdesc}<br>'
+                    f'<strong>Numerator:</strong> {_vnum}<br><strong>Denominator:</strong> {_vden}<br>'
+                    f'<strong>Method:</strong> {_vmeth}</div>'
+                    f'<div style="font-family:monospace;font-size:0.65rem;color:var(--muted);margin-top:4px;background:var(--panel);padding:4px 6px;border-radius:3px;">{_vsql}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
     else:
         st.info("No OTD variant data available.")
 
@@ -2217,78 +2253,82 @@ with trust_tab:
     render_section("Persona Consistency")
 
     if not persona_otd_df.empty:
-        _p_version = ""
-        _p_strip = '<div class="enterprise-strip">'
-        for _, pr in persona_otd_df.iterrows():
-            p_name = _html.escape(str(pr.get("PERSONA", "")))
-            p_val = as_float(pr.get("RESOLVED_VALUE", 0))
-            p_match = pr.get("MATCHES_GOVERNED", False)
-            p_vid = str(pr.get("PREFERRED_VARIANT_ID", ""))
-            if not _p_version and p_vid:
-                _p_version = p_vid
-            _p_icon = "\u2713" if p_match else "\u2717"
-            _p_color = "var(--accent)" if p_match else "var(--amber)"
-            _p_strip += (
-                f'<div class="es-item">'
-                f'<div class="es-label">{p_name}</div>'
-                f'<div class="es-value" style="color:{_p_color};">{p_val:.6f}%</div>'
-                f'<div class="es-caption" style="color:{_p_color};">{_p_icon} Governed</div>'
-                f'</div>'
-            )
-        _p_strip += '</div>'
-        st.markdown(_p_strip, unsafe_allow_html=True)
-        if _p_version:
+        _p_all_match = all(persona_otd_df["MATCHES_GOVERNED"]) if "MATCHES_GOVERNED" in persona_otd_df.columns else False
+        _p_version = str(persona_otd_df.iloc[0].get("PREFERRED_VARIANT_ID", "")) if not persona_otd_df.empty else ""
+        _pcols = st.columns(len(persona_otd_df))
+        for _pi, (_, _pr) in enumerate(persona_otd_df.iterrows()):
+            with _pcols[_pi]:
+                _pn = _html.escape(str(_pr.get("PERSONA", "")))
+                _pv = as_float(_pr.get("RESOLVED_VALUE", 0))
+                _pm = _pr.get("MATCHES_GOVERNED", False)
+                _pc = "var(--accent)" if _pm else "var(--amber)"
+                _pd = _html.escape(str(_pr.get("PERSONA_DESCRIPTION", ""))[:80])
+                st.markdown(
+                    f'<div class="card" style="border-left:3px solid {_pc};text-align:center;">'
+                    f'<div class="card-title" style="font-size:0.88rem;">{_pn}</div>'
+                    f'<div style="font-size:1.3rem;font-weight:800;color:{_pc};margin:6px 0;">{_pv:.6f}%</div>'
+                    f'<div style="font-size:0.68rem;color:var(--muted);">{_pd}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        if _p_all_match:
             st.markdown(
-                f'<div style="font-size:0.72rem;color:var(--muted);margin:4px 0 12px;">'
-                f'All personas resolve to {_html.escape(_p_version)} under the governed definition.</div>',
+                f'<div class="success-box" style="font-size:0.82rem;text-align:center;margin-top:4px;">'
+                f'All personas resolve to the same governed definition ({_html.escape(_p_version)}).</div>',
                 unsafe_allow_html=True,
             )
+        else:
+            st.markdown('<div class="boundary" style="font-size:0.82rem;">Persona consistency mismatch detected.</div>', unsafe_allow_html=True)
     else:
         st.info("No persona consistency data available.")
 
-    # ── Data Readiness Grid ──────────────────────────────────────────────────
-    render_section("Data Readiness Grid")
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 2 — WHAT CAN WE ACTUALLY CALCULATE?
+    # ══════════════════════════════════════════════════════════════════════════
+    render_section("What can we actually calculate?")
 
     if not metric_readiness_df.empty:
-        _mr_certified = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] == "Certified"])
-        _mr_notcomp = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"])
-        rc1, rc2, rc3 = st.columns(3)
-        rc1.metric("Total Metrics", f"{len(metric_readiness_df)}")
-        rc2.metric("Certified", f"{_mr_certified}")
-        rc3.metric("Not Computable", f"{_mr_notcomp}")
-
-        _mr_rows = ""
-        for _, mr in metric_readiness_df.iterrows():
-            _mr_name = _html.escape(str(mr.get("METRIC_NAME", "")))
-            _mr_src = _html.escape(str(mr.get("SOURCE_SYSTEM", "")))
-            _mr_status = str(mr.get("READINESS_STATUS", ""))
-            _mr_reason = str(mr.get("BLOCKING_REASON", "None"))
-            if _mr_reason in ("None", "") or not _mr_reason.strip():
-                _mr_reason = "\u2014"
-            else:
-                _mr_reason = _html.escape(_mr_reason[:120] + ("..." if len(_mr_reason) > 120 else ""))
-            if _mr_status == "Certified":
-                _mr_badge = f'<span style="color:var(--accent);font-weight:700;">{_html.escape(_mr_status)}</span>'
-            else:
-                _mr_badge = f'<span style="color:var(--amber);font-weight:700;">{_html.escape(_mr_status)}</span>'
-            _mr_rows += f'<tr><td>{_mr_name}</td><td>{_mr_src}</td><td>{_mr_badge}</td><td style="font-size:0.72rem;">{_mr_reason}</td></tr>'
-        _mr_html = (
-            '<div class="dark-board">'
-            '<div class="tbl-title">Metric Readiness</div>'
-            f'<div class="tbl-sub">{len(metric_readiness_df)} metrics assessed</div>'
-            '<div style="overflow-x:auto;max-height:500px;overflow-y:auto;">'
-            '<table class="dark-table"><thead><tr>'
-            '<th>Metric</th><th>Source</th><th>Status</th><th>Blocking Reason</th>'
-            '</tr></thead><tbody>'
-            f'{_mr_rows}'
-            '</tbody></table></div></div>'
+        _tr_cert = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] == "Certified"])
+        _tr_block = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"])
+        st.markdown(
+            f'<div style="font-size:0.92rem;color:var(--text);margin-bottom:10px;">'
+            f'<strong style="color:var(--accent);">{_tr_cert} certified</strong>, '
+            f'<strong style="color:var(--amber);">{_tr_block} not computable</strong></div>',
+            unsafe_allow_html=True,
         )
-        st.markdown(_mr_html, unsafe_allow_html=True)
-    else:
-        st.info("No metric readiness data available.")
 
-    # ── Red Team Summary ─────────────────────────────────────────────────────
-    render_section("Red Team Summary")
+        _tr_rows = ""
+        for _, _rr in metric_readiness_df.iterrows():
+            _rn = _html.escape(str(_rr.get("METRIC_NAME", "")))
+            _rsrc = _html.escape(str(_rr.get("SOURCE_SYSTEM", "")))
+            _rs = str(_rr.get("READINESS_STATUS", ""))
+            _rblock = str(_rr.get("BLOCKING_REASON", ""))
+            _runlock = str(_rr.get("WHAT_DATA_WOULD_UNLOCK", ""))
+            _rnull = as_float(_rr.get("NULL_COVERAGE_PCT", 0))
+            if _rs == "Certified":
+                _rbadge = '<span style="color:var(--accent);font-weight:700;">Certified</span>'
+                _rreason = f'{_rnull:.0f}% null coverage' if _rnull > 0 else "\u2014"
+                _runlock_d = "\u2014"
+            else:
+                _rbadge = '<span style="color:var(--amber);font-weight:700;">Not Computable</span>'
+                _rreason = _html.escape(_rblock[:100] + ("..." if len(_rblock) > 100 else "")) if _rblock and _rblock != "None" else "\u2014"
+                _runlock_d = _html.escape(_runlock[:80] + ("..." if len(_runlock) > 80 else "")) if _runlock and _runlock != "None" else "\u2014"
+            _tr_rows += f'<tr><td>{_rn}</td><td>{_rsrc}</td><td>{_rbadge}</td><td style="font-size:0.72rem;">{_rreason}</td><td style="font-size:0.72rem;">{_runlock_d}</td></tr>'
+        st.markdown(
+            '<div class="dark-board"><div class="tbl-title">Metric Readiness</div>'
+            f'<div class="tbl-sub">{len(metric_readiness_df)} metrics assessed</div>'
+            '<div style="overflow-x:auto;max-height:500px;overflow-y:auto;"><table class="dark-table"><thead><tr>'
+            '<th>Metric</th><th>Source</th><th>Status</th><th>Blocking Reason</th><th>Required to Unlock</th>'
+            f'</tr></thead><tbody>{_tr_rows}</tbody></table></div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No readiness data available.")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 3 — DOES THE AGENT HOLD THE LINE?
+    # ══════════════════════════════════════════════════════════════════════════
+    render_section("Does the agent hold the line?")
 
     if not red_team_df.empty:
         _rt_latest_id = red_team_df["RUN_ID"].iloc[-1] if "RUN_ID" in red_team_df.columns else ""
@@ -2296,15 +2336,10 @@ with trust_tab:
         _rt_latest_total = len(_rt_latest)
         _rt_latest_passed = int(_rt_latest["PASS_FLAG"].sum()) if "PASS_FLAG" in _rt_latest.columns else 0
 
-        rts1, rts2, rts3 = st.columns(3)
-        rts1.metric("Total Case-Runs", f"{total_red_team}")
-        rts2.metric("Runs", f"{red_team_runs}")
-        rts3.metric("Latest Run", f"{_rt_latest_passed}/{_rt_latest_total} PASS")
-
         st.markdown(
-            f'<div class="success-box">'
-            f'<strong>{total_red_team} case-runs across {red_team_runs} runs; latest run {_rt_latest_passed}/{_rt_latest_total} PASS</strong>'
-            f'</div>',
+            f'<div class="success-box" style="font-size:0.92rem;">'
+            f'<strong>Latest run {_rt_latest_passed}/{_rt_latest_total} PASS</strong>; '
+            f'{total_red_team} case-runs across {red_team_runs} runs</div>',
             unsafe_allow_html=True,
         )
 
@@ -2312,26 +2347,24 @@ with trust_tab:
             _rt_disp = _rt_latest.copy()
             if "PASS_FLAG" in _rt_disp.columns:
                 _rt_disp["RESULT"] = _rt_disp["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
-            _rt_cols = {}
-            if "CATEGORY" in _rt_disp.columns:
-                _rt_cols["CATEGORY"] = "Case Class"
-            if "QUESTION" in _rt_disp.columns:
-                _rt_cols["QUESTION"] = "Question"
-            if "RESULT" in _rt_disp.columns:
-                _rt_cols["RESULT"] = "Result"
-            if _rt_cols:
-                render_beige_board(
-                    f"Latest Run: {_html.escape(str(_rt_latest_id))}",
-                    _rt_disp,
-                    columns=_rt_cols,
-                    subtitle=f"{_rt_latest_passed}/{_rt_latest_total} passed",
-                )
+            render_beige_board(
+                f"Latest: {_html.escape(str(_rt_latest_id))}",
+                _rt_disp,
+                columns={"CATEGORY": "Case Class", "EXPECTED_BEHAVIOR": "Expected", "RESULT": "Result"} if all(c in _rt_disp.columns for c in ["CATEGORY", "EXPECTED_BEHAVIOR", "RESULT"]) else {"CATEGORY": "Case Class", "QUESTION": "Question", "RESULT": "Result"} if all(c in _rt_disp.columns for c in ["CATEGORY", "QUESTION", "RESULT"]) else None,
+                subtitle=f"{_rt_latest_passed}/{_rt_latest_total} passed",
+            )
 
         with st.expander("View full Red Team history"):
             _rt_hist = red_team_df.copy()
             if "PASS_FLAG" in _rt_hist.columns:
                 _rt_hist["RESULT"] = _rt_hist["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
             render_beige_board("Red Team History", _rt_hist, subtitle=f"All {total_red_team} case-runs across {red_team_runs} runs")
+
+        st.markdown(
+            '<div style="font-size:0.72rem;color:var(--muted);margin-top:8px;font-style:italic;">'
+            'The agent follows governed formulas through its instructions; red-team tests verify behavior but are not a mathematical guarantee.</div>',
+            unsafe_allow_html=True,
+        )
     else:
         st.info("No red team results available.")
 

@@ -188,9 +188,48 @@ section[data-testid="stMain"], .main .block-container {
 [data-baseweb="tag"] svg { fill: var(--accent) !important; }
 .stSlider [data-baseweb="slider"] div[role="slider"] { background: var(--accent) !important; }
 .stSlider [data-baseweb="slider"] div[data-testid="stTickBar"] > div { background: var(--accent) !important; }
-.stButton > button[kind="primary"] { background: var(--accent) !important; border-color: var(--accent) !important; color: #000 !important; padding:6px 20px !important; font-size:0.82rem !important; }
-.stButton > button[kind="primary"]:hover { opacity: 0.85; }
+/* Primary buttons (Ask →) */
+.stButton > button[kind="primary"],
+.stButton > button[kind="primaryFormSubmit"],
+.stFormSubmitButton > button,
+[data-testid="stFormSubmitButton"] > button,
+button[kind="primary"],
+button[kind="primaryFormSubmit"] {
+    background-color: var(--accent) !important;
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: #000 !important;
+    padding: 6px 20px !important;
+    font-size: 0.82rem !important;
+    font-weight: 700 !important;
+}
+.stButton > button[kind="primary"]:hover,
+.stButton > button[kind="primaryFormSubmit"]:hover,
+.stFormSubmitButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover,
+button[kind="primary"]:hover,
+button[kind="primaryFormSubmit"]:hover {
+    opacity: 0.85;
+    background-color: var(--accent) !important;
+    background: var(--accent) !important;
+}
+/* Secondary/default buttons (presets, clear) — neutral dark styling */
+.stButton > button[kind="secondary"],
+.stButton > button:not([kind="primary"]):not([kind="primaryFormSubmit"]) {
+    background: var(--panel-2) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-2) !important;
+    font-size: 0.78rem !important;
+}
+.stButton > button[kind="secondary"]:hover,
+.stButton > button:not([kind="primary"]):not([kind="primaryFormSubmit"]):hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: var(--panel-2) !important;
+}
+/* Focus rings — teal not red */
 input:focus, textarea:focus, [data-baseweb="select"] [aria-expanded="true"] { border-color: var(--accent) !important; box-shadow: 0 0 0 1px var(--accent) !important; }
+button:focus-visible { outline-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent-soft) !important; }
 
 /* ── Topbar ───────────────────────────────────────────────────────── */
 .topbar {

@@ -1885,22 +1885,22 @@ button[data-baseweb="tab"][aria-selected="true"] {
 
         # ── Refusal / readiness / governance boundary cards ──
         # Detect cross-source join intent from question + answer
-        _dataco_terms = ["order", "orders", "customer", "customers", "product", "products", "dataco", "sales", "delivery"]
-        _scms_terms = ["shipment", "shipments", "supplier", "suppliers", "site", "sites", "freight", "scms", "logistics"]
-        _join_terms = ["join", "link", "combine", "match", "merge", "connect", "integrate"]
+        _dataco_terms = ["dataco"]
+        _scms_terms = ["scms"]
+        _join_terms = ["join", "link", "combine", "match", "merge", "connect"]
         _q_lower = st.session_state.cur_q.lower()
         _a_lower = answer_text.lower()
         _q_has_dataco = any(t in _q_lower for t in _dataco_terms)
         _q_has_scms = any(t in _q_lower for t in _scms_terms)
         _q_has_join = any(t in _q_lower for t in _join_terms)
-        _answer_refuses_join = ("row-level" in _a_lower and ("not supported" in _a_lower or "cannot" in _a_lower or "no shared" in _a_lower))
-        _is_cross_source_boundary = (_q_has_dataco and _q_has_scms and _q_has_join) or _answer_refuses_join
-        # Also use provenance detection if available
+        _q_cross_join = _q_has_dataco and _q_has_scms and _q_has_join
+        _answer_refuses_join = ("row-level" in _a_lower and ("can't" in _a_lower or "cannot" in _a_lower or "not able" in _a_lower))
+        _is_cross_source_boundary = _q_cross_join or _answer_refuses_join
         if prov_obj.get("cross_source_detected") or prov_obj.get("applicable_rules"):
             _is_cross_source_boundary = True
 
-        # Render governance boundary card (independent of readiness_matches)
-        if _is_cross_source_boundary and is_refusal:
+        # Render governance boundary card (does NOT require is_refusal for question path)
+        if _is_cross_source_boundary:
             _unsup_rules = [r for r in rel_gov_df.to_dict("records") if r.get("STATUS") == "UNSUPPORTED"] if not rel_gov_df.empty else []
             _boundary_body = '<strong>A row-level join between DataCo and SCMS is not supported.</strong><br>'
             if _unsup_rules:
@@ -1973,14 +1973,14 @@ button[data-baseweb="tab"][aria-selected="true"] {
             psql = prov_obj.get("physical_sql")
             if psql:
                 st.code(psql, language="sql")
-            elif is_refusal:
+            elif is_refusal or _is_cross_source_boundary:
                 st.markdown("*No SQL generated: this request was refused under governance.*")
             else:
                 st.markdown("*No SQL captured for this response.*")
             sv_prov = prov_obj.get("semantic_view")
             if sv_prov:
                 st.markdown(f"**Semantic model:** `{sv_prov}`")
-            elif is_refusal:
+            elif is_refusal or _is_cross_source_boundary:
                 st.markdown("**Semantic model:** governance refusal (no model invoked)")
             else:
                 st.markdown("**Semantic model:** \u2014")

@@ -2431,7 +2431,7 @@ with trust_tab:
     render_section("Does the agent hold the line?")
 
     if not red_team_df.empty:
-        _rt_latest_id = red_team_df["RUN_ID"].iloc[-1] if "RUN_ID" in red_team_df.columns else ""
+        _rt_latest_id = _rt_latest_run if _rt_latest_run else (red_team_df["RUN_ID"].iloc[-1] if "RUN_ID" in red_team_df.columns else "")
         _rt_latest = red_team_df[red_team_df["RUN_ID"] == _rt_latest_id]
         _rt_latest_total = len(_rt_latest)
         _rt_latest_passed = int(_rt_latest["PASS_FLAG"].sum()) if "PASS_FLAG" in _rt_latest.columns else 0

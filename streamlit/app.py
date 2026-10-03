@@ -1843,232 +1843,302 @@ with analyst_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with gov_tab:
 
-    _h20 = '<div class="hero"> <div class="hero-title">Governance &amp; Ontology</div> <div class="hero-copy"> Entity catalog, relationship governance, metric registry, and architectural constraints that define the trusted analytical boundary of SupplyChainIQ CoCo. </div> </div>'
-    st.markdown(_h20, unsafe_allow_html=True)
-
-    # ── Ontology Graph ─────────────────────────────────────────────────────────
-    render_section("Entity Relationship Graph")
+    # ── Header ───────────────────────────────────────────────────────────────
     st.markdown(
-        '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:12px;">'
-        'Governed entity relationships generated from live ontology tables. '
-        'Teal solid = supported join. Red dashed = blocked (no row-level key). '
-        'DataCo and SCMS are independent source systems — country-aggregate comparison only.</div>',
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Governance</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Definitions, relationships, readiness and analytical boundaries behind governed supply-chain answers.</div>',
         unsafe_allow_html=True,
     )
 
-    # Build DOT dynamically from ENTITY_CATALOG + RELATIONSHIP_GOVERNANCE
-    _dataco_ents = set()
-    _scms_ents = set()
-    _bridge_ents = set()
-    if not entity_cat_df.empty and "SOURCE_SYSTEM" in entity_cat_df.columns:
-        for _, _ec in entity_cat_df.iterrows():
-            _ename = str(_ec.get("ENTITY_NAME", "")).strip()
-            _esrc = str(_ec.get("SOURCE_SYSTEM", "")).upper()
-            if "BOTH" in _esrc or "CONFORMED" in _esrc:
-                _bridge_ents.add(_ename)
-            elif "DATACO" in _esrc:
-                _dataco_ents.add(_ename)
-            elif "SCMS" in _esrc:
-                _scms_ents.add(_ename)
-            else:
-                _bridge_ents.add(_ename)
-    _all_ents = _dataco_ents | _scms_ents | _bridge_ents
-    if not rel_gov_df.empty:
-        for _, _rg in rel_gov_df.iterrows():
-            for _ecol in ("SUBJECT_ENTITY", "OBJECT_ENTITY"):
-                _en = str(_rg.get(_ecol, "")).strip()
-                if _en and _en not in _all_ents:
-                    _bridge_ents.add(_en)
-                    _all_ents.add(_en)
-
-    _dot_lines = [
-        'digraph G {',
-        '  rankdir=TB;',
-        '  bgcolor="transparent";',
-        '  node [shape=box,style="filled,rounded",fontname="Helvetica",fontsize=10,fillcolor="#171C21",fontcolor="#E6EDF3",color="#232A31"];',
-        '  edge [fontname="Helvetica",fontsize=8];',
-    ]
-    if _dataco_ents:
-        _dot_lines.append('  subgraph cluster_dataco {')
-        _dot_lines.append('    label="DataCo"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#3FB8A0"; style=dashed; color="#3FB8A0";')
-        for _e in sorted(_dataco_ents):
-            _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
-            _dot_lines.append(f'    {_e} [label="{_lbl}"];')
-        _dot_lines.append('  }')
-    if _scms_ents:
-        _dot_lines.append('  subgraph cluster_scms {')
-        _dot_lines.append('    label="SCMS"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#D9A441"; style=dashed; color="#D9A441";')
-        for _e in sorted(_scms_ents):
-            _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
-            _dot_lines.append(f'    {_e} [label="{_lbl}"];')
-        _dot_lines.append('  }')
-    for _e in sorted(_bridge_ents):
-        _lbl = _e.replace("_", " ")
-        _dot_lines.append(f'  {_e} [fillcolor="#232A31",label="{_lbl}\\n(Bridge)"];')
-    if not rel_gov_df.empty:
-        for _, _rg in rel_gov_df.iterrows():
-            _s = str(_rg.get("SUBJECT_ENTITY", "")).strip()
-            _o = str(_rg.get("OBJECT_ENTITY", "")).strip()
-            _st = str(_rg.get("STATUS", "")).upper()
-            _is_bridge = (_s in _bridge_ents or _o in _bridge_ents) and not (_s in _bridge_ents and _o in _bridge_ents)
-            if _st == "SUPPORTED":
-                if _is_bridge:
-                    _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5,label="country\\naggregate",fontcolor="#3FB8A0"];')
-                else:
-                    _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5];')
-            else:
-                _dot_lines.append(f'  {_s} -> {_o} [color="#E5534B",style=dashed,penwidth=1.5,label="blocked",fontcolor="#E5534B"];')
-    _dot_lines.append('}')
-    _ontology_dot = '\n'.join(_dot_lines)
-
-    _graphviz_ok = hasattr(st, "graphviz_chart")
-    if _graphviz_ok:
-        try:
-            st.graphviz_chart(_ontology_dot, use_container_width=True)
-        except Exception:
-            _graphviz_ok = False
-    if not _graphviz_ok:
-        # HTML/CSS two-island fallback
-        _dc_html = " ".join(f'<span class="entity-chip">{_html.escape(e)}</span>' for e in sorted(_dataco_ents))
-        _sc_html = " ".join(f'<span class="entity-chip" style="border-color:var(--amber);color:var(--amber);">{_html.escape(e)}</span>' for e in sorted(_scms_ents))
-        _br_html = " ".join(f'<span class="entity-chip" style="border-color:var(--text-2);color:var(--text-2);">{_html.escape(e)}</span>' for e in sorted(_bridge_ents))
-        _supp_count = len(rel_gov_df[rel_gov_df["STATUS"] == "SUPPORTED"]) if not rel_gov_df.empty else 0
-        _unsupp_count = len(rel_gov_df[rel_gov_df["STATUS"] != "SUPPORTED"]) if not rel_gov_df.empty else 0
-        _fallback = (
-            f'<div class="card card-severity-info" style="margin:10px 0;">'
-            f'<div class="card-title">Two-Island Ontology</div>'
-            f'<div class="card-body">'
-            f'<strong style="color:var(--accent);">DataCo</strong>: {_dc_html}<br><br>'
-            f'<strong style="color:var(--amber);">SCMS</strong>: {_sc_html}<br><br>'
-            f'<strong>Bridge</strong>: {_br_html}<br><br>'
-            f'{_supp_count} supported joins (teal) &middot; {_unsupp_count} blocked (red dashed)'
-            f'</div></div>'
-        )
-        st.markdown(_fallback, unsafe_allow_html=True)
-
-    # ── Entity Catalog ────────────────────────────────────────────────────────
-    render_section("Entity Catalog")
-    st.markdown(
-        '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-        'All governed entities across DataCo and SCMS source systems.</div>',
-        unsafe_allow_html=True,
+    # ── Governance status strip (live counts) ────────────────────────────────
+    _gov_metric_cnt = len(metric_reg_df) if not metric_reg_df.empty else 0
+    _gov_ready_cnt = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] == "Certified"]) if not metric_readiness_df.empty else 0
+    _gov_blocked_cnt = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"]) if not metric_readiness_df.empty else 0
+    _gov_sup_rel = len(rel_gov_df[rel_gov_df["STATUS"] == "SUPPORTED"]) if not rel_gov_df.empty else 0
+    _gov_unsup_rel = len(rel_gov_df[rel_gov_df["STATUS"] != "SUPPORTED"]) if not rel_gov_df.empty else 0
+    _gov_strip = (
+        '<div class="enterprise-strip" style="margin-bottom:16px;">'
+        f'<div class="es-item"><div class="es-label">Governed Metrics</div><div class="es-value" style="color:var(--accent);">{_gov_metric_cnt}</div></div>'
+        f'<div class="es-item"><div class="es-label">Ready</div><div class="es-value" style="color:var(--accent);">{_gov_ready_cnt}</div></div>'
+        f'<div class="es-item"><div class="es-label">Blocked</div><div class="es-value" style="color:var(--amber);">{_gov_blocked_cnt}</div></div>'
+        f'<div class="es-item"><div class="es-label">Supported Rels</div><div class="es-value" style="color:var(--accent);">{_gov_sup_rel}</div></div>'
+        f'<div class="es-item"><div class="es-label">Unsupported Rels</div><div class="es-value" style="color:var(--amber);">{_gov_unsup_rel}</div></div>'
+        '</div>'
     )
+    st.markdown(_gov_strip, unsafe_allow_html=True)
 
-    if not entity_cat_df.empty:
-        source_opts = sorted(entity_cat_df["SOURCE_SYSTEM"].dropna().unique().tolist())
-        sel_source = st.multiselect("Filter by source system", source_opts, default=source_opts, key="ent_src_flt")
-        filtered_ent = entity_cat_df[entity_cat_df["SOURCE_SYSTEM"].isin(sel_source)] if sel_source else entity_cat_df
+    # ── Sub-tabs ─────────────────────────────────────────────────────────────
+    gov_metrics_tab, gov_rels_tab, gov_ready_tab, gov_otd_tab = st.tabs([
+        "Metrics", "Relationships", "Readiness", "OTD Variants"
+    ])
 
-        ec1, ec2 = st.columns(2)
-        ec1.metric("Total Entities", f"{len(entity_cat_df)}")
-        ec2.metric("Shown", f"{len(filtered_ent)}")
-
-        render_beige_board(
-            "Entity Catalog",
-            filtered_ent,
-            subtitle=f"{len(filtered_ent)} entities across {len(sel_source)} source systems",
-        )
-
-        # Entity chips
-        chips_html = ""
-        for _, row in entity_cat_df.iterrows():
-            name = _html.escape(str(row.get("ENTITY_NAME", "")))
-            src = _html.escape(str(row.get("SOURCE_SYSTEM", "")))
-            chips_html += f'<span class="entity-chip">{name} ({src})</span> '
-        if chips_html:
-            st.markdown(f'<div style="margin:10px 0;">{chips_html}</div>', unsafe_allow_html=True)
-    else:
-        st.info("No entity catalog data available.")
-
-    # ── Entity Relationships ──────────────────────────────────────────────────
-    render_section("Entity Relationships")
-
-    if not entity_rel_df.empty:
-        er1, er2 = st.columns(2)
-        er1.metric("Total Relationships", f"{len(entity_rel_df)}")
-        if "RELATIONSHIP_TYPE" in entity_rel_df.columns:
-            rel_types = entity_rel_df["RELATIONSHIP_TYPE"].nunique()
-            er2.metric("Relationship Types", f"{rel_types}")
-
-        render_beige_board(
-            "Entity Relationships",
-            entity_rel_df,
-            subtitle="Governed relationships between entities — defines valid join paths",
-        )
-    else:
-        st.info("No entity relationship data available.")
-
-    # ── Relationship Governance ───────────────────────────────────────────────
-    render_section("Relationship Governance")
-
-    if not rel_gov_df.empty:
-        supported = rel_gov_df[rel_gov_df["STATUS"] == "SUPPORTED"]
-        unsupported = rel_gov_df[rel_gov_df["STATUS"] != "SUPPORTED"]
-
-        rg1, rg2, rg3 = st.columns(3)
-        rg1.metric("Total Relationships", f"{len(rel_gov_df)}")
-        rg2.metric("Supported", f"{len(supported)}")
-        rg3.metric("Unsupported", f"{len(unsupported)}")
-
-        if not supported.empty:
-            _h21 = f'<div class="success-box"> <strong>{len(supported)} supported relationships</strong> — these entity joins are governed and analytically valid. </div>'
-            st.markdown(_h21, unsafe_allow_html=True)
+    # ══════════════════════════════════════════════════════════════════════════
+    # METRICS
+    # ══════════════════════════════════════════════════════════════════════════
+    with gov_metrics_tab:
+        if not metric_reg_df.empty:
             render_beige_board(
-                "Supported Relationships",
-                supported,
+                "Governed metrics",
+                metric_reg_df,
+                columns={"METRIC_ID": "Metric ID", "METRIC_NAME": "Metric", "DEFINITION": "Definition",
+                         "SOURCE_SYSTEM": "Source", "GRAIN": "Grain", "STATUS": "Status"},
+                subtitle=f"{_gov_metric_cnt} governed metrics",
+                highlight_col="STATUS",
+            )
+            with st.expander("View governed calculations"):
+                for _, _mr in metric_reg_df.iterrows():
+                    _mid = _html.escape(str(_mr.get("METRIC_ID", "")))
+                    _mname = _html.escape(str(_mr.get("METRIC_NAME", "")))
+                    _mver = _html.escape(str(_mr.get("VERSION", "1.0")))
+                    _msrc = _html.escape(str(_mr.get("SOURCE_SYSTEM", "")))
+                    _mgrain = _html.escape(str(_mr.get("GRAIN", "")))
+                    _mdef = _html.escape(str(_mr.get("DEFINITION", "")))
+                    _msql = _html.escape(str(_mr.get("SQL_EXPRESSION", "")))
+                    st.markdown(
+                        f'<div class="card" style="border-left:3px solid var(--accent);margin-bottom:8px;">'
+                        f'<div class="card-title">{_mname} <span style="color:var(--muted);font-size:0.68rem;">({_mid} v{_mver})</span></div>'
+                        f'<div class="card-body" style="font-size:0.78rem;">{_mdef}<br>'
+                        f'<span style="color:var(--muted);">{_msrc} \u00b7 {_mgrain}</span></div>'
+                        f'<div style="font-family:monospace;font-size:0.7rem;color:var(--muted);margin-top:4px;background:var(--panel);padding:6px 8px;border-radius:4px;">{_msql}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.info("No metric registry data available.")
+        st.markdown('<div style="font-size:0.68rem;color:var(--muted);margin-top:8px;">Source: SEMANTIC.METRIC_REGISTRY</div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RELATIONSHIPS
+    # ══════════════════════════════════════════════════════════════════════════
+    with gov_rels_tab:
+        # Ontology graph (reuse existing live DOT generation)
+        _dataco_ents = set()
+        _scms_ents = set()
+        _bridge_ents = set()
+        if not entity_cat_df.empty and "SOURCE_SYSTEM" in entity_cat_df.columns:
+            for _, _ec in entity_cat_df.iterrows():
+                _ename = str(_ec.get("ENTITY_NAME", "")).strip()
+                _esrc = str(_ec.get("SOURCE_SYSTEM", "")).upper()
+                if "BOTH" in _esrc or "CONFORMED" in _esrc:
+                    _bridge_ents.add(_ename)
+                elif "DATACO" in _esrc:
+                    _dataco_ents.add(_ename)
+                elif "SCMS" in _esrc:
+                    _scms_ents.add(_ename)
+                else:
+                    _bridge_ents.add(_ename)
+        _all_ents = _dataco_ents | _scms_ents | _bridge_ents
+        if not rel_gov_df.empty:
+            for _, _rg in rel_gov_df.iterrows():
+                for _ecol in ("SUBJECT_ENTITY", "OBJECT_ENTITY"):
+                    _en = str(_rg.get(_ecol, "")).strip()
+                    if _en and _en not in _all_ents:
+                        _bridge_ents.add(_en)
+                        _all_ents.add(_en)
+
+        _dot_lines = ['digraph G {', '  rankdir=TB;', '  bgcolor="transparent";',
+            '  node [shape=box,style="filled,rounded",fontname="Helvetica",fontsize=10,fillcolor="#171C21",fontcolor="#E6EDF3",color="#232A31"];',
+            '  edge [fontname="Helvetica",fontsize=8];']
+        if _dataco_ents:
+            _dot_lines.append('  subgraph cluster_dataco {')
+            _dot_lines.append('    label="DataCo"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#3FB8A0"; style=dashed; color="#3FB8A0";')
+            for _e in sorted(_dataco_ents):
+                _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
+                _dot_lines.append(f'    {_e} [label="{_lbl}"];')
+            _dot_lines.append('  }')
+        if _scms_ents:
+            _dot_lines.append('  subgraph cluster_scms {')
+            _dot_lines.append('    label="SCMS"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#D9A441"; style=dashed; color="#D9A441";')
+            for _e in sorted(_scms_ents):
+                _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
+                _dot_lines.append(f'    {_e} [label="{_lbl}"];')
+            _dot_lines.append('  }')
+        for _e in sorted(_bridge_ents):
+            _dot_lines.append(f'  {_e} [fillcolor="#232A31",label="{_e.replace("_"," ")}\\n(Bridge)"];')
+        if not rel_gov_df.empty:
+            for _, _rg in rel_gov_df.iterrows():
+                _s = str(_rg.get("SUBJECT_ENTITY", "")).strip()
+                _o = str(_rg.get("OBJECT_ENTITY", "")).strip()
+                _st = str(_rg.get("STATUS", "")).upper()
+                _is_bridge = (_s in _bridge_ents or _o in _bridge_ents) and not (_s in _bridge_ents and _o in _bridge_ents)
+                if _st == "SUPPORTED":
+                    if _is_bridge:
+                        _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5,label="country\\naggregate",fontcolor="#3FB8A0"];')
+                    else:
+                        _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5];')
+                else:
+                    _dot_lines.append(f'  {_s} -> {_o} [color="#D9A441",style=dashed,penwidth=1.5,label="blocked",fontcolor="#D9A441"];')
+        _dot_lines.append('}')
+        _graphviz_ok = hasattr(st, "graphviz_chart")
+        if _graphviz_ok:
+            try:
+                st.graphviz_chart('\n'.join(_dot_lines), use_container_width=True)
+            except Exception:
+                _graphviz_ok = False
+        if not _graphviz_ok:
+            _dc_html = " ".join(f'<span class="entity-chip">{_html.escape(e)}</span>' for e in sorted(_dataco_ents))
+            _sc_html = " ".join(f'<span class="entity-chip" style="border-color:var(--amber);color:var(--amber);">{_html.escape(e)}</span>' for e in sorted(_scms_ents))
+            st.markdown(f'<div class="card card-severity-info"><div class="card-body"><strong style="color:var(--accent);">DataCo</strong>: {_dc_html}<br><br><strong style="color:var(--amber);">SCMS</strong>: {_sc_html}</div></div>', unsafe_allow_html=True)
+
+        st.markdown(
+            '<div style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;">'
+            'Teal solid = supported join. Amber dashed = blocked (no row-level key). '
+            'Country-aggregate comparison is permitted; row-level source joining is not.</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Relationship governance table
+        if not rel_gov_df.empty:
+            _supported = rel_gov_df[rel_gov_df["STATUS"] == "SUPPORTED"]
+            _unsupported = rel_gov_df[rel_gov_df["STATUS"] != "SUPPORTED"]
+            render_beige_board(
+                f"Supported relationships ({len(_supported)})",
+                _supported,
+                columns={"SUBJECT_ENTITY": "From", "RELATIONSHIP": "Relationship", "OBJECT_ENTITY": "To",
+                         "STATUS": "Status", "LEFT_KEY": "Join Key", "EVIDENCE": "Evidence"},
                 subtitle="Governed entity joins that are analytically valid",
             )
+            if not _unsupported.empty:
+                st.markdown(
+                    f'<div class="boundary" style="margin:8px 0;">'
+                    f'<strong>{len(_unsupported)} unsupported relationships</strong> \u2014 blocked by governance constraints.</div>',
+                    unsafe_allow_html=True,
+                )
+                render_beige_board(
+                    "Unsupported relationships",
+                    _unsupported,
+                    columns={"SUBJECT_ENTITY": "From", "RELATIONSHIP": "Relationship", "OBJECT_ENTITY": "To",
+                             "STATUS": "Status", "NOTES": "Reason"},
+                    subtitle="Entity joins blocked by two-island or other governance constraints",
+                )
 
-        if not unsupported.empty:
-            _h22 = f'<div class="boundary"> <strong>{len(unsupported)} unsupported relationships</strong> — these entity joins are blocked by governance constraints (primarily the two-island constraint). </div>'
-            st.markdown(_h22, unsafe_allow_html=True)
-            render_beige_board(
-                "Unsupported Relationships",
-                unsupported,
-                subtitle="Entity joins blocked by two-island or other governance constraints",
+        with st.expander("View entity catalog"):
+            if not entity_cat_df.empty:
+                render_beige_board("Entity Catalog", entity_cat_df, subtitle="All governed entities")
+        st.markdown('<div style="font-size:0.68rem;color:var(--muted);margin-top:8px;">Source: ONTOLOGY.RELATIONSHIP_GOVERNANCE \u00b7 ONTOLOGY.ENTITY_CATALOG</div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # READINESS
+    # ══════════════════════════════════════════════════════════════════════════
+    with gov_ready_tab:
+        if not metric_readiness_df.empty:
+            _r_ready = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] == "Certified"])
+            _r_blocked = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"])
+            _r_strip = (
+                '<div class="enterprise-strip" style="margin-bottom:12px;">'
+                f'<div class="es-item"><div class="es-label">Ready</div><div class="es-value" style="color:var(--accent);">{_r_ready}</div></div>'
+                f'<div class="es-item"><div class="es-label">Blocked</div><div class="es-value" style="color:var(--amber);">{_r_blocked}</div></div>'
+                f'<div class="es-item"><div class="es-label">Total</div><div class="es-value">{len(metric_readiness_df)}</div></div>'
+                '</div>'
             )
-    else:
-        st.info("No relationship governance data available.")
+            st.markdown(_r_strip, unsafe_allow_html=True)
 
-    # ── Metric Registry ───────────────────────────────────────────────────────
-    render_section("Metric Registry")
+            # Readiness matrix
+            _rdy_rows = ""
+            for _, _rr in metric_readiness_df.iterrows():
+                _rn = _html.escape(str(_rr.get("METRIC_NAME", "")))
+                _rs = str(_rr.get("READINESS_STATUS", ""))
+                _rsrc = _html.escape(str(_rr.get("SOURCE_SYSTEM", "")))
+                _rnull = as_float(_rr.get("NULL_COVERAGE_PCT", 0))
+                _rblock = str(_rr.get("BLOCKING_REASON", ""))
+                _runlock = str(_rr.get("WHAT_DATA_WOULD_UNLOCK", ""))
+                if _rs == "Certified":
+                    _rbadge = f'<span style="color:var(--accent);font-weight:700;">Certified</span>'
+                    _reason = f'{_rnull:.0f}% null coverage'
+                else:
+                    _rbadge = f'<span style="color:var(--amber);font-weight:700;">Blocked</span>'
+                    _reason = _html.escape(_rblock[:100] + ("..." if len(_rblock) > 100 else "")) if _rblock and _rblock != "None" else "\u2014"
+                _rdy_rows += f'<tr><td>{_rn}</td><td>{_rsrc}</td><td>{_rbadge}</td><td style="font-size:0.72rem;">{_reason}</td></tr>'
 
-    if not metric_reg_df.empty:
-        if "STATUS" in metric_reg_df.columns:
-            status_counts = metric_reg_df["STATUS"].value_counts()
-            status_labels = list(status_counts.index)
-            mr_cols = st.columns(1 + len(status_labels))
-            mr_cols[0].metric("Total Metrics", f"{len(metric_reg_df)}")
-            for i, label in enumerate(status_labels):
-                mr_cols[1 + i].metric(label, f"{int(status_counts[label])}")
+            st.markdown(
+                '<div class="dark-board"><div class="tbl-title">Metric Readiness</div>'
+                f'<div class="tbl-sub">{len(metric_readiness_df)} metrics assessed</div>'
+                '<div style="overflow-x:auto;max-height:500px;overflow-y:auto;"><table class="dark-table"><thead><tr>'
+                '<th>Metric</th><th>Source</th><th>Readiness</th><th>Coverage / Blocking Reason</th>'
+                f'</tr></thead><tbody>{_rdy_rows}</tbody></table></div></div>',
+                unsafe_allow_html=True,
+            )
+
+            # Blocked detail expander
+            _blocked = metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"]
+            if not _blocked.empty:
+                with st.expander(f"Blocked metrics detail ({len(_blocked)})"):
+                    for _, _br in _blocked.iterrows():
+                        _bn = _html.escape(str(_br.get("METRIC_NAME", "")))
+                        _bb = _html.escape(str(_br.get("BLOCKING_REASON", "")))
+                        _bu = _html.escape(str(_br.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                        st.markdown(
+                            f'<div class="card" style="border-left:3px solid var(--amber);margin-bottom:8px;">'
+                            f'<div class="card-title">{_bn}</div>'
+                            f'<div class="card-body" style="font-size:0.78rem;">'
+                            f'<strong>Blocked:</strong> {_bb}<br>'
+                            f'<strong>Required to unlock:</strong> {_bu if _bu and _bu != "None" else "\u2014"}'
+                            f'</div></div>',
+                            unsafe_allow_html=True,
+                        )
         else:
-            st.metric("Total Metrics", f"{len(metric_reg_df)}")
+            st.info("No readiness data available.")
+        st.markdown('<div style="font-size:0.68rem;color:var(--muted);margin-top:8px;">Source: EVALUATION.METRIC_READINESS</div>', unsafe_allow_html=True)
 
-        render_beige_board(
-            "Governed Metrics",
-            metric_reg_df,
-            subtitle="All registered metrics with formulas, sources, and computation status",
+    # ══════════════════════════════════════════════════════════════════════════
+    # OTD VARIANTS
+    # ══════════════════════════════════════════════════════════════════════════
+    with gov_otd_tab:
+        st.markdown(
+            '<div style="font-size:0.85rem;color:var(--text-2);margin-bottom:12px;">'
+            'Different OTD definitions can produce different answers. The governed variant is canonical.</div>',
+            unsafe_allow_html=True,
         )
-    else:
-        st.info("No metric registry data available.")
+        if not otd_variants_df.empty:
+            render_beige_board(
+                f"OTD Variant Registry ({len(otd_variants_df)} variants)",
+                otd_variants_df,
+                columns={"VARIANT_NAME": "Variant", "GOVERNANCE_STATUS": "Status",
+                         "DENOMINATOR_TREATMENT": "Denominator", "NUMERATOR_LOGIC": "Numerator",
+                         "COMPUTED_VALUE": "OTD %", "DEVIATION_FROM_GOVERNED": "Deviation"},
+                subtitle="Each variant represents a valid but different interpretation of On-Time Delivery",
+                highlight_col="GOVERNANCE_STATUS",
+                formats={"COMPUTED_VALUE": fmt_pct, "DEVIATION_FROM_GOVERNED": fmt_pct},
+            )
+            _gov_v = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] == "GOVERNED"]
+            if not _gov_v.empty:
+                _gval = as_float(_gov_v.iloc[0].get("COMPUTED_VALUE", 0))
+                _gdesc = _html.escape(str(_gov_v.iloc[0].get("DESCRIPTION", "")))
+                st.markdown(
+                    f'<div class="success-box" style="font-size:0.82rem;">'
+                    f'<strong>Canonical: {_gval:.2f}%</strong> \u2014 {_gdesc}</div>',
+                    unsafe_allow_html=True,
+                )
+            with st.expander("Variant methodology details"):
+                for _, _vr in otd_variants_df.iterrows():
+                    _vn = _html.escape(str(_vr.get("VARIANT_NAME", "")))
+                    _vs = _html.escape(str(_vr.get("GOVERNANCE_STATUS", "")))
+                    _vd = _html.escape(str(_vr.get("DESCRIPTION", "")))
+                    _vm = _html.escape(str(_vr.get("METHODOLOGY", "")))
+                    _vc = "var(--accent)" if _vs == "GOVERNED" else "var(--muted)"
+                    st.markdown(
+                        f'<div class="card" style="border-left:3px solid {_vc};margin-bottom:8px;">'
+                        f'<div class="card-title">{_vn} <span style="font-size:0.65rem;color:{_vc};">{_vs}</span></div>'
+                        f'<div class="card-body" style="font-size:0.78rem;">{_vd}<br>'
+                        f'<span style="color:var(--muted);">Methodology: {_vm}</span></div></div>',
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.info("No OTD variant data available.")
+        st.markdown('<div style="font-size:0.68rem;color:var(--muted);margin-top:8px;">Source: EVALUATION.OTD_VARIANT_REGISTRY</div>', unsafe_allow_html=True)
 
-    # ── Two-Island Constraint ─────────────────────────────────────────────────
-    render_section("Two-Island Architectural Constraint")
-
-    _h23 = '<div class="boundary"> <strong>Two-Island Constraint</strong><br><br> DataCo and SCMS are <strong>independent source systems</strong> with <strong>no row-level join key</strong>. There is no shared order ID, customer ID, product ID, or shipment ID between the two systems.<br><br> <strong>What is allowed:</strong><br> &bull; Country-aggregate comparison — country name is the only shared dimension<br> &bull; Independent analysis within each source<br> &bull; Side-by-side metric display with clear source attribution<br><br> <strong>What is blocked:</strong><br> &bull; Row-level joins between DataCo and SCMS entities<br> &bull; Queries that imply a direct order&harr;shipment relationship<br> &bull; Blended metrics that mix row-level data from both sources<br><br> The agent is trained to refuse queries that violate this constraint and explain why. </div>'
-    st.markdown(_h23, unsafe_allow_html=True)
-
-    # ── Non-Computable Metrics ────────────────────────────────────────────────
-    render_section("Non-Computable Metrics")
-
-    _h24 = '<div class="card card-severity-info"> <div class="card-title">Metrics That Cannot Be Computed</div> <div class="card-body"> These standard supply-chain KPIs are registered in the metric registry but <strong>cannot be computed</strong> from available source data. The agent will decline requests for these metrics with an explanation.<br><br> &bull; <strong>Fill Rate</strong> — requires demand vs fulfilled quantity; neither source has partial-fill data<br> &bull; <strong>Days of Inventory (DOI)</strong> — requires inventory on-hand snapshots; no inventory data exists<br> &bull; <strong>Inventory Turnover</strong> — requires COGS and average inventory; no inventory data exists<br> &bull; <strong>Return Rate</strong> — requires return event data; neither source tracks returns<br> &bull; <strong>Perfect Order Rate</strong> — requires multiple quality dimensions not captured in either source </div> <div class="card-source">Governance: METRIC_REGISTRY &middot; Status: NOT_COMPUTABLE</div> </div>'
-    st.markdown(_h24, unsafe_allow_html=True)
-
-    # ── Outlier Inclusion Policy ──────────────────────────────────────────────
-    render_section("Outlier Inclusion Policy")
-
-    _h25 = f'<div class="card card-severity-warning"> <div class="card-title">Outlier Inclusion Policy</div> <div class="card-body"> The SupplyChainIQ governance framework requires that <strong>all data points be included</strong> in analyses, even statistical outliers. Specifically:<br><br> &bull; <strong>Belize</strong> ({belize_rate:.0f}% logistics cost rate) must always be included in country-level analyses and surfaced explicitly to users<br> &bull; No data point may be silently excluded based on its being an outlier<br> &bull; The agent is trained to present outliers with context rather than filtering them out<br> &bull; Users can filter outliers themselves but the system must not do so automatically<br><br> This policy ensures transparency and prevents data manipulation through selective exclusion. </div> <div class="card-source">Governance: Outlier Inclusion Policy &middot; Enforced by agent + semantic layer</div> </div>'
-    st.markdown(_h25, unsafe_allow_html=True)
+    # ── Governance principle ──────────────────────────────────────────────────
+    st.markdown(
+        '<div class="card card-severity-info" style="margin-top:16px;">'
+        '<div class="card-title">Governance principle</div>'
+        '<div class="card-body" style="font-size:0.82rem;">'
+        'SupplyChainIQ distinguishes between what is defined, what is computable, '
+        'which relationships are permitted, and what the system must refuse. '
+        'Blocked metrics and unsupported joins are intentional governance decisions, not errors.'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -138,7 +138,8 @@ The Cortex Agent (`SUPPLYCHAINIQ_COCO_AGENT`) uses `cortex_analyst_text_to_sql` 
 - Use governed metric formulas exactly as defined
 - Never join ORDER_ITEM_FACT to SCMS_SHIPMENT_FACT at row level
 - Attribute every answer to its source system (DataCo or SCMS)
-- Decline non-computable metrics with an explanation
+- Decline non-computable metrics with an explanation and a structured Data Readiness card
+- Refuse unsupported row-level cross-source joins with a Governance Boundary card showing the blocked relationships and allowed alternatives
 - Never silently exclude outliers (Belize ~311% logistics rate is real data)
 - Cross-source comparison only at country-aggregate level via GEOGRAPHY_DIM
 
@@ -150,14 +151,14 @@ The Cortex Agent (`SUPPLYCHAINIQ_COCO_AGENT`) uses `cortex_analyst_text_to_sql` 
 |-------|-------|---------------|
 | Smoke / Regression | 50 | 50/50 PASS |
 | Red Team | 16 case-runs across 3 runs; latest run 8/8 PASS | 16/16 PASS overall |
-| Provenance | 10 | 10 resolution test definitions |
+| Provenance | 10 | 10/10 defined |
 
 ### Governance Registry (19 entries, not executable tests)
 
 | Registry | Count |
 |----------|-------|
 | OTD Variant Registry | 5 (1 governed, 4 alternative definitions) |
-| Metric Readiness | 14 (8 certified, 6 not computable) |
+| Metric Readiness | 14 assessed: 8 certified, 6 not computable (each with a recorded reason and unlock requirement) |
 
 ### Red Team Purpose
 
@@ -226,6 +227,7 @@ These three queries demonstrate the core governance behavior in the Analyst tab:
 1. **"What is our enterprise on-time delivery rate?"** -- resolves to the governed OTD_PCT metric with source attribution and provenance
 2. **"Can you calculate Fill Rate?"** -- returns a data readiness explanation: Fill Rate is not computable from the available data
 3. **"Join DataCo orders with SCMS shipments."** -- triggers a governance boundary refusal: no row-level cross-source join key exists
+4. **"Show delivery and logistics by country"** -- produces a valid country-aggregate comparison: DataCo and SCMS are aggregated independently and aligned by country
 
 ## Development with Snowflake CoCo CLI
 
@@ -233,7 +235,9 @@ SupplyChainIQ was developed iteratively using Snowflake CoCo CLI as the developm
 
 ## Prototype
 
-The prototype is deployed as a Streamlit-in-Snowflake application using the `@SUPPLYCHAINIQ_COCO.APP.STREAMLIT_STAGE` stage. The public prototype link is provided separately through the hackathon submission.
+The prototype is deployed as a Streamlit-in-Snowflake application using the `@SUPPLYCHAINIQ_COCO.APP.STREAMLIT_STAGE` stage.
+
+Live prototype: [SupplyChainIQ on Snowflake](https://app.snowflake.com/streamlit/wrgmccw/oq37336/#/apps/e7zi2oo6jek3aun7gfpj)
 
 ## Analyst Governance and Trust Behavior
 
@@ -248,6 +252,14 @@ The Analyst tab enforces governance rules at the UI layer, producing structured 
 **SCMS-exclusion note.** When multiple governed DataCo metric cards are displayed, the source-island exclusion note appears once after the card group rather than repeated on each card.
 
 DataCo and SCMS remain separate source islands. Cross-source comparison is performed only at defensible country-aggregate level.
+
+### Governance-Aware Analyst Behavior
+
+- Non-computable metric named in question + no SQL generated = Data Readiness card with blocking reason
+- Explicit unsupported DataCo/SCMS row-level join request + no SQL generated = Governance Boundary card with UNSUPPORTED relationship evidence
+- Valid country-level comparison = allowed; each source is aggregated independently before country alignment
+- Generated SQL for a valid country comparison does not trigger a Governance Boundary card
+- Governed analytical answers expose generated SQL, semantic model, metric definition, and data-quality context
 
 ## Latest Prototype Updates
 
@@ -267,7 +279,7 @@ DataCo and SCMS remain separate source islands. Cross-source comparison is perfo
 - **No row-level cross-source join**: DataCo orders and SCMS shipments cannot be linked at the transaction level. Country-aggregate comparison is the only supported cross-source grain.
 - **Non-computable metrics**: Fill Rate, Days of Inventory, Inventory Turnover, Perfect Order Rate, Return Rate, and Landed Cost cannot be certified from available data.
 - **Freight null coverage**: SCMS freight cost is null for 39.97% of shipments. Freight-based metrics are computed from non-null rows and represent lower bounds.
-- **Country mapping coverage**: The cross-source scorecard contains 167 country labels versus 165 canonical countries in GEOGRAPHY_DIM because 2 SCMS country encoding variants are not yet matched by the canonical country mapping. The governed cross-source analysis uses the canonical mapping; this is a documented data-quality gap.
+- **Country mapping coverage**: The cross-source scorecard contains 167 country labels versus 165 canonical countries in GEOGRAPHY_DIM. 2 SCMS spelling/encoding variants are not currently matched to GEOGRAPHY_DIM. The governed cross-source analysis uses the canonical mapping.
 - **Agent instruction adherence**: The red-team suite validates expected governance behavior, but natural-language interfaces cannot provide a mathematical guarantee that every possible query will produce the governed answer.
 - **Temporal mismatch**: DataCo covers 2015--2018; SCMS covers 2006--2015. Cross-source country comparisons span different time windows.
 

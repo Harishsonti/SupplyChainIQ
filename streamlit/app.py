@@ -370,6 +370,9 @@ def _load_all(_session):
     d["provenance_tests"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PROVENANCE_TESTS ORDER BY TEST_ID").to_pandas()
     d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC LIMIT 15").to_pandas()
     d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC LIMIT 15").to_pandas()
+    d["country_log_rate"] = _session.sql("SELECT COUNTRY, LOGISTICS_COST_RATE_PCT, SHIPMENT_COUNT, FREIGHT_COST_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 10").to_pandas()
+    d["risk_high"] = _session.sql("SELECT COUNTRY, RISK_SIGNAL_COUNT, DELAY_RATE_PCT, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT WHERE RISK_TIER = 'HIGH' ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 10").to_pandas()
+    d["supplier_top5"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 5").to_pandas()
     d["geo"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME").to_pandas()
     d["otd_variants"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.OTD_VARIANT_REGISTRY ORDER BY VARIANT_ID").to_pandas()
     d["persona_otd"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PERSONA_OTD_CONSISTENCY ORDER BY PERSONA").to_pandas()
@@ -403,6 +406,9 @@ red_team_summary = _data["red_team_summary"]
 provenance_tests_df = _data["provenance_tests"]
 country_del_df = _data["country_del"]
 country_log_df = _data["country_log"]
+country_log_rate_df = _data["country_log_rate"]
+risk_high_df = _data["risk_high"]
+supplier_top5_df = _data["supplier_top5"]
 geo_df = _data["geo"]
 otd_variants_df = _data["otd_variants"]
 persona_otd_df = _data["persona_otd"]
@@ -714,134 +720,231 @@ with tower_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with signals_tab:
 
-    _h9 = f'<div class="hero"> <div class="hero-title">Decision Signals</div> <div class="hero-copy"> Operational signals surfaced from governed analytics. Each signal is grounded in semantic-layer metrics with full source attribution. Signals are ranked by severity. </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Delay Rate</div> <div class="value">{delay:.1f}%</div> <div class="note">{"CRITICAL" if delay > 50 else "NORMAL"}</div> </div> <div class="hero-kpi"> <div class="label">High-Risk Countries</div> <div class="value">{high_risk_count}</div> <div class="note">countries</div> </div> <div class="hero-kpi"> <div class="label">Belize Anomaly</div> <div class="value">{belize_rate:.0f}%</div> <div class="note">logistics rate</div> </div> <div class="hero-kpi"> <div class="label">Null Freight</div> <div class="value">{null_freight_pct:.0f}%</div> <div class="note">SCMS gap</div> </div> </div> </div>'
-    st.markdown(_h9, unsafe_allow_html=True)
-
-    # ── Signal 1: Delivery Risk ───────────────────────────────────────────────
-    render_section("Signal 1 — Delivery Risk")
-
-    severity_class = "card-severity-critical" if delay > 50 else "card-severity-info"
-    severity_word = "CRITICAL" if delay > 50 else "NORMAL"
-    render_signal_card(
-        f"Delivery Risk — {severity_word}",
-        f"""{delay:.1f}% of non-cancelled DataCo order items were delivered late.
-Enterprise on-time delivery is {otd:.1f}%. Average delay is {avg_delay_days:.1f} days.
-{"This exceeds the 50% threshold and warrants immediate investigation." if delay > 50 else "Within acceptable operational bounds."}""",
-        "Source: ENTERPRISE_DELIVERY_SCORECARD | Metric: ON_TIME_DELIVERY_PCT (governed) | DataCo",
-        severity="critical" if delay > 50 else "info",
+    # ── Header ───────────────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Decision Signals</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Ranked supply-chain exceptions and evidence. Signals ordered by severity.</div>',
+        unsafe_allow_html=True,
     )
 
-    if not monthly_del_df.empty:
-        st.markdown('<div class="graph-board"><div class="graph-label">OTD Trend Over Time (context for delivery risk)</div></div>', unsafe_allow_html=True)
-        st.line_chart(monthly_del_df.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=250)
+    # ── Build signal list ────────────────────────────────────────────────────
+    _signals = []
 
-    # ── Signal 2: Logistics Cost Anomaly ──────────────────────────────────────
-    render_section("Signal 2 — Logistics Cost Anomaly")
+    # S1: Delivery Risk
+    _s1_sev = "critical" if delay > 50 else "info"
+    _signals.append({"id": "s1", "title": "Delivery risk", "severity": _s1_sev,
+        "metric": f"{delay:.1f}%", "metric_label": "delay rate",
+        "body": f"The governed DataCo OTD rate is {otd:.1f}%. {delay:.1f}% of non-cancelled items were delivered late." + (" Exceeds 50% threshold." if delay > 50 else ""),
+        "source": "ENTERPRISE_DELIVERY_SCORECARD \u00b7 ON_TIME_DELIVERY_PCT"})
 
-    render_signal_card(
-        f"Logistics Cost Anomaly — Belize ({belize_rate:.0f}%)",
-        f"""Belize logistics cost rate is {belize_rate:.0f}% — freight cost exceeds shipment value
-by approximately 3x. This is real data, not an error. The governed outlier-inclusion policy requires
-this data point to be included in all analyses and surfaced explicitly rather than silently excluded.
-Investigate root cause before taking action.""",
-        "Source: COUNTRY_LOGISTICS_SCORECARD | Metric: LOGISTICS_COST_RATE_PCT (governed) | SCMS",
-        severity="warning",
+    # S2: Logistics Cost Anomaly
+    _signals.append({"id": "s2", "title": "Logistics cost anomaly", "severity": "warning",
+        "metric": f"{belize_rate:.0f}%", "metric_label": "Belize logistics rate",
+        "body": f"Belize logistics cost rate is {belize_rate:.0f}% \u2014 freight exceeds shipment value. Included per outlier-inclusion policy; not excluded.",
+        "source": "COUNTRY_LOGISTICS_SCORECARD \u00b7 LOGISTICS_COST_RATE_PCT"})
+
+    # S3: Country Risk
+    _s3_sev = "critical" if high_risk_count > 5 else "warning"
+    _signals.append({"id": "s3", "title": "Country risk", "severity": _s3_sev,
+        "metric": f"{high_risk_count}", "metric_label": "HIGH-tier countries",
+        "body": f"{high_risk_count} countries flagged HIGH risk (2+ signals above median). {medium_risk_count} MEDIUM, {low_risk_count} LOW.",
+        "source": "COUNTRY_RISK_ASSESSMENT \u00b7 RISK_TIER"})
+
+    # S4: Data Quality Gap
+    _signals.append({"id": "s4", "title": "Data quality gap", "severity": "warning",
+        "metric": f"{null_freight_pct:.0f}%", "metric_label": "SCMS null freight",
+        "body": f"Freight-based logistics metrics are lower bounds because freight cost is null for {null_freight_pct:.0f}% of shipments.",
+        "source": "ENTERPRISE_LOGISTICS_SCORECARD \u00b7 NULL_FREIGHT_PCT"})
+
+    # S5: Supplier Concentration
+    _s5_top5_val = as_float(supplier_top5_df["SHIPMENT_VALUE_USD"].sum()) if not supplier_top5_df.empty else 0
+    _s5_total_val = as_float(supplier_df["SHIPMENT_VALUE_USD"].sum()) if not supplier_df.empty else 1
+    _s5_pct = (_s5_top5_val / max(_s5_total_val, 1)) * 100
+    _s5_sev = "warning" if _s5_pct > 50 else "info"
+    _signals.append({"id": "s5", "title": "Supplier concentration", "severity": _s5_sev,
+        "metric": f"{_s5_pct:.1f}%", "metric_label": "top-5 share",
+        "body": f"Top 5 suppliers hold {_s5_pct:.1f}% of SCMS shipment value (${fmt_val(_s5_top5_val)} of ${fmt_val(_s5_total_val)}).",
+        "source": f"SUPPLIER_SCORECARD \u00b7 {supplier_count} suppliers"})
+
+    # S6: Non-Computable Metrics
+    _nc_metrics = metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"] if not metric_readiness_df.empty else None
+    _nc_count = len(_nc_metrics) if _nc_metrics is not None and not _nc_metrics.empty else 0
+    _nc_list = ""
+    if _nc_metrics is not None and not _nc_metrics.empty:
+        for _, _ncr in _nc_metrics.iterrows():
+            _nc_name = _html.escape(str(_ncr.get("METRIC_NAME", "")))
+            _nc_reason = str(_ncr.get("BLOCKING_REASON", ""))
+            _nc_short = _html.escape(_nc_reason[:80] + ("..." if len(_nc_reason) > 80 else "")) if _nc_reason else "\u2014"
+            _nc_list += f"<br>\u2022 <strong>{_nc_name}</strong> \u2014 {_nc_short}"
+    _signals.append({"id": "s6", "title": "Non-computable metrics", "severity": "warning",
+        "metric": f"{_nc_count}", "metric_label": "metrics blocked",
+        "body": f"{_nc_count} standard KPIs cannot be computed from available data.{_nc_list}<br><br><em>See Trust tab for full readiness grid.</em>",
+        "source": "EVALUATION.METRIC_READINESS"})
+
+    # S7: Two-Island Constraint
+    _signals.append({"id": "s7", "title": "Two-island constraint", "severity": "info",
+        "metric": "Active", "metric_label": "governance constraint",
+        "body": "DataCo and SCMS are separate source islands with no row-level join key. Row-level cross-source joins are unsupported. Country-aggregate comparison is the only valid cross-source grain.",
+        "source": "ONTOLOGY.RELATIONSHIP_GOVERNANCE"})
+
+    # ── Sort by severity ─────────────────────────────────────────────────────
+    _sev_order = {"critical": 0, "warning": 1, "info": 2}
+    _signals.sort(key=lambda s: _sev_order.get(s["severity"], 3))
+
+    # ── Severity summary row ─────────────────────────────────────────────────
+    _cnt_crit = sum(1 for s in _signals if s["severity"] == "critical")
+    _cnt_warn = sum(1 for s in _signals if s["severity"] == "warning")
+    _cnt_info = sum(1 for s in _signals if s["severity"] == "info")
+    _sev_strip = (
+        '<div class="enterprise-strip" style="margin-bottom:16px;">'
+        f'<div class="es-item"><div class="es-label">Critical</div><div class="es-value" style="color:var(--amber);">{_cnt_crit}</div></div>'
+        f'<div class="es-item"><div class="es-label">Warning</div><div class="es-value" style="color:var(--amber);">{_cnt_warn}</div></div>'
+        f'<div class="es-item"><div class="es-label">Info</div><div class="es-value" style="color:var(--accent);">{_cnt_info}</div></div>'
+        '</div>'
     )
+    st.markdown(_sev_strip, unsafe_allow_html=True)
 
-    if not country_log_df.empty:
-        top_logistic_countries = country_log_df.head(10)
-        if "COUNTRY" in top_logistic_countries.columns and "LOGISTICS_COST_RATE_PCT" in top_logistic_countries.columns:
-            st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Countries by Logistics Cost Rate</div></div>', unsafe_allow_html=True)
-            st.bar_chart(top_logistic_countries.set_index("COUNTRY")[["LOGISTICS_COST_RATE_PCT"]])
+    # ── Signal card renderer ─────────────────────────────────────────────────
+    _sev_colors = {"critical": "var(--amber)", "warning": "var(--amber)", "info": "var(--accent)"}
+    _sev_labels = {"critical": "CRITICAL", "warning": "WARNING", "info": "INFO"}
 
-    # ── Signal 3: Country Risk ────────────────────────────────────────────────
-    render_section("Signal 3 — Country Risk")
-
-    risk_severity = "critical" if high_risk_count > 5 else "warning"
-    render_signal_card(
-        f"Country Risk — {high_risk_count} HIGH-Tier Countries",
-        f"""{high_risk_count} countries flagged as HIGH risk based on 2+ risk signals above median thresholds
-(delay rate, logistics cost rate, freight cost). An additional {medium_risk_count} countries are MEDIUM risk
-and {low_risk_count} are LOW risk. Risk assessment is computed at country-aggregate level — the only
-defensible cross-source grain.""",
-        "Source: COUNTRY_RISK_ASSESSMENT | Benchmark: median-relative thresholds | Both sources",
-        severity=risk_severity,
-    )
-
-    if not risk_df.empty:
-        high_risk = risk_df[risk_df["RISK_TIER"] == "HIGH"]
-        if not high_risk.empty:
-            render_beige_board(
-                "HIGH-Risk Countries",
-                high_risk,
-                subtitle="Countries with 2+ signals above median",
-            )
-
-    # ── Signal 4: Data Quality Gap ────────────────────────────────────────────
-    render_section("Signal 4 — Data Quality Gap")
-
-    render_signal_card(
-        f"Data Quality Gap — SCMS Null Freight ({null_freight_pct:.0f}%)",
-        f"""{null_freight_pct:.0f}% of SCMS shipment records have NULL freight cost. This means:
-- Total freight cost ({fmt_usd(freight_cost)}) is understated
-- Logistics cost rate ({logistics_rate:.1f}%) is understated
-- Per-country freight comparisons may be skewed by uneven NULL distribution
-All freight-based metrics should be interpreted as lower-bound estimates.""",
-        "Source: ENTERPRISE_LOGISTICS_SCORECARD | NULL_FREIGHT_PCT | SCMS",
-        severity="warning",
-    )
-
-    # ── Signal 5: Supplier Concentration ──────────────────────────────────────
-    render_section("Signal 5 — Supplier Concentration")
-
-    if not supplier_df.empty:
-        top5_val = as_float(supplier_df.head(5)["SHIPMENT_VALUE_USD"].sum())
-        total_val = as_float(supplier_df["SHIPMENT_VALUE_USD"].sum())
-        top5_pct = (top5_val / max(total_val, 1)) * 100
-        render_signal_card(
-            f"Supplier Concentration — Top 5 = {top5_pct:.1f}% of Value",
-            f"""The top 5 suppliers by shipment value account for {top5_pct:.1f}% of total SCMS
-shipment value (${fmt_val(top5_val)} of ${fmt_val(total_val)}). This level of concentration
-{"represents significant vendor dependency risk." if top5_pct > 50 else "is within acceptable bounds."}""",
-            f"Source: SUPPLIER_SCORECARD | {supplier_count} total suppliers | SCMS",
-            severity="warning" if top5_pct > 50 else "info",
+    def _render_sig_card(sig):
+        _sc = _sev_colors.get(sig["severity"], "var(--accent)")
+        _sl = _sev_labels.get(sig["severity"], "INFO")
+        st.markdown(
+            f'<div class="card" style="border-left:3px solid {_sc};">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+            f'<div class="card-title" style="margin:0;">{_html.escape(sig["title"])}</div>'
+            f'<span style="background:{_sc};color:#000;font-size:0.58rem;padding:2px 8px;border-radius:3px;font-weight:700;">{_sl}</span>'
+            f'</div>'
+            f'<div style="font-size:1.35rem;font-weight:800;color:{_sc};margin-bottom:4px;">{sig["metric"]}</div>'
+            f'<div style="font-size:0.65rem;color:var(--muted);margin-bottom:6px;">{_html.escape(sig["metric_label"])}</div>'
+            f'<div class="card-body">{sig["body"]}</div>'
+            f'<div class="card-source">{_html.escape(sig["source"])}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-        top_freight_sup = supplier_df.nlargest(5, "LOGISTICS_COST_RATE_PCT")
-        render_beige_board(
-            "Top 5 Suppliers by Logistics Cost Rate",
-            top_freight_sup,
-            subtitle="Highest cost-rate suppliers — may indicate pricing or routing inefficiency",
-        )
+    # ── 2-column signal grid ─────────────────────────────────────────────────
+    for _si in range(0, len(_signals), 2):
+        _col_a, _col_b = st.columns(2)
+        with _col_a:
+            _render_sig_card(_signals[_si])
+            # Evidence expander
+            _sid = _signals[_si]["id"]
+            if _sid == "s1":
+                with st.expander("Evidence"):
+                    if not monthly_del_df.empty and "MONTH_START" in monthly_del_df.columns:
+                        try:
+                            import altair as alt
+                            import pandas as _pd_s
+                            _t = monthly_del_df[["MONTH_START", "ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]].copy()
+                            _t["MONTH_START"] = _pd_s.to_datetime(_t["MONTH_START"])
+                            _tm = _t.melt("MONTH_START", var_name="Metric", value_name="Pct")
+                            _cs = alt.Scale(domain=["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"], range=["#3FB8A0", "#D9A441"])
+                            _ch = alt.Chart(_tm).mark_line(strokeWidth=2).encode(
+                                x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                                y=alt.Y("Pct:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+                                color=alt.Color("Metric:N", scale=_cs, legend=alt.Legend(title=None, orient="top")),
+                                tooltip=["MONTH_START:T", "Metric:N", alt.Tooltip("Pct:Q", format=".1f")],
+                            ).properties(height=220)
+                            st.altair_chart(_ch, use_container_width=True)
+                        except Exception:
+                            st.line_chart(monthly_del_df.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=220)
+            elif _sid == "s3":
+                with st.expander("Evidence"):
+                    if not risk_high_df.empty:
+                        render_beige_board("Top HIGH-risk countries", risk_high_df,
+                            columns={"COUNTRY": "Country", "RISK_SIGNAL_COUNT": "Risk Signals", "DELAY_RATE_PCT": "Delay %", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                            subtitle=f"{len(risk_high_df)} HIGH-tier countries",
+                            formats={"DELAY_RATE_PCT": fmt_pct, "LOGISTICS_COST_RATE_PCT": fmt_pct})
+                    else:
+                        st.info("No HIGH-risk countries.")
+            elif _sid == "s5":
+                with st.expander("Evidence"):
+                    if not supplier_top5_df.empty:
+                        _st5 = supplier_top5_df.copy()
+                        _st5["SHARE_PCT"] = _st5["SHIPMENT_VALUE_USD"].apply(lambda v: round(100.0 * as_float(v) / max(_s5_total_val, 1), 1))
+                        render_beige_board("Top 5 suppliers by value", _st5,
+                            columns={"SUPPLIER": "Supplier", "SHIPMENT_VALUE_USD": "Value", "SHARE_PCT": "Share %"},
+                            subtitle="SCMS source",
+                            formats={"SHIPMENT_VALUE_USD": fmt_usd, "SHARE_PCT": fmt_pct})
+            elif _sid == "s6":
+                with st.expander("Evidence"):
+                    if _nc_metrics is not None and not _nc_metrics.empty:
+                        render_beige_board("Non-computable metrics", _nc_metrics,
+                            columns={"METRIC_NAME": "Metric", "BLOCKING_REASON": "Blocking Reason"},
+                            subtitle="EVALUATION.METRIC_READINESS")
+            elif _sid == "s7":
+                pass  # No evidence needed for info constraint
 
-    # ── Signal 6: Non-Computable Metrics ──────────────────────────────────────
-    render_section("Signal 6 — Non-Computable Metrics")
-
-    render_signal_card(
-        "Non-Computable Metrics",
-        """The following standard supply chain KPIs <strong>cannot be computed</strong> from available data:<br>
-&bull; <strong>Fill Rate</strong> — no partial-fill or demand-vs-fulfilled data<br>
-&bull; <strong>Days of Inventory (DOI)</strong> — no inventory snapshot data<br>
-&bull; <strong>Inventory Turnover</strong> — no inventory on-hand data<br>
-&bull; <strong>Return Rate</strong> — no returns data<br>
-&bull; <strong>Perfect Order Rate</strong> — multiple quality dimensions not captured<br>
-The agent is trained to decline these queries with an explanation rather than hallucinate values.""",
-        "Source: METRIC_REGISTRY | Governance: governed refusal policy",
-        severity="info",
-    )
-
-    # ── Signal 7: Two-Island Constraint ───────────────────────────────────────
-    render_section("Signal 7 — Architectural Constraint")
-
-    render_signal_card(
-        "Two-Island Constraint Active",
-        """DataCo and SCMS share <strong>no row-level join key</strong>. The agent enforces this
-constraint by refusing queries that attempt to join order-level DataCo data with shipment-level SCMS
-data. The only valid cross-source analysis is at <strong>country-aggregate level</strong>, where
-country name serves as the shared dimension.""",
-        "Source: ONTOLOGY.RELATIONSHIP_GOVERNANCE | Governance: two-island constraint",
-        severity="info",
-    )
+        if _si + 1 < len(_signals):
+            with _col_b:
+                _render_sig_card(_signals[_si + 1])
+                _sid2 = _signals[_si + 1]["id"]
+                if _sid2 == "s2":
+                    with st.expander("Evidence"):
+                        if not country_log_rate_df.empty and "COUNTRY" in country_log_rate_df.columns:
+                            try:
+                                import altair as alt
+                                _bdata = country_log_rate_df[["COUNTRY", "LOGISTICS_COST_RATE_PCT"]].copy()
+                                _bdata["is_belize"] = _bdata["COUNTRY"].str.upper() == "BELIZE"
+                                _bb = alt.Chart(_bdata).mark_bar(cornerRadiusEnd=3).encode(
+                                    y=alt.Y("COUNTRY:N", sort="-x", title=None, axis=alt.Axis(labelLimit=140)),
+                                    x=alt.X("LOGISTICS_COST_RATE_PCT:Q", title="Logistics Cost Rate %"),
+                                    color=alt.condition(alt.datum.is_belize, alt.value("#D9A441"), alt.value("#3FB8A0")),
+                                    tooltip=["COUNTRY:N", alt.Tooltip("LOGISTICS_COST_RATE_PCT:Q", format=".1f")],
+                                ).properties(height=240)
+                                st.altair_chart(_bb, use_container_width=True)
+                            except Exception:
+                                render_beige_board("Top 10 by logistics rate", country_log_rate_df,
+                                    columns={"COUNTRY": "Country", "LOGISTICS_COST_RATE_PCT": "Rate %"},
+                                    formats={"LOGISTICS_COST_RATE_PCT": fmt_pct})
+                elif _sid2 == "s1":
+                    with st.expander("Evidence"):
+                        if not monthly_del_df.empty and "MONTH_START" in monthly_del_df.columns:
+                            try:
+                                import altair as alt
+                                import pandas as _pd_s2
+                                _t2 = monthly_del_df[["MONTH_START", "ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]].copy()
+                                _t2["MONTH_START"] = _pd_s2.to_datetime(_t2["MONTH_START"])
+                                _tm2 = _t2.melt("MONTH_START", var_name="Metric", value_name="Pct")
+                                _cs2 = alt.Scale(domain=["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"], range=["#3FB8A0", "#D9A441"])
+                                _ch2 = alt.Chart(_tm2).mark_line(strokeWidth=2).encode(
+                                    x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                                    y=alt.Y("Pct:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+                                    color=alt.Color("Metric:N", scale=_cs2, legend=alt.Legend(title=None, orient="top")),
+                                ).properties(height=220)
+                                st.altair_chart(_ch2, use_container_width=True)
+                            except Exception:
+                                st.line_chart(monthly_del_df.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=220)
+                elif _sid2 == "s3":
+                    with st.expander("Evidence"):
+                        if not risk_high_df.empty:
+                            render_beige_board("Top HIGH-risk countries", risk_high_df,
+                                columns={"COUNTRY": "Country", "RISK_SIGNAL_COUNT": "Risk Signals", "DELAY_RATE_PCT": "Delay %", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                                subtitle=f"{len(risk_high_df)} HIGH-tier countries",
+                                formats={"DELAY_RATE_PCT": fmt_pct, "LOGISTICS_COST_RATE_PCT": fmt_pct})
+                elif _sid2 == "s4":
+                    pass  # Compact card, no extra evidence
+                elif _sid2 == "s5":
+                    with st.expander("Evidence"):
+                        if not supplier_top5_df.empty:
+                            _st5b = supplier_top5_df.copy()
+                            _st5b["SHARE_PCT"] = _st5b["SHIPMENT_VALUE_USD"].apply(lambda v: round(100.0 * as_float(v) / max(_s5_total_val, 1), 1))
+                            render_beige_board("Top 5 suppliers by value", _st5b,
+                                columns={"SUPPLIER": "Supplier", "SHIPMENT_VALUE_USD": "Value", "SHARE_PCT": "Share %"},
+                                subtitle="SCMS source",
+                                formats={"SHIPMENT_VALUE_USD": fmt_usd, "SHARE_PCT": fmt_pct})
+                elif _sid2 == "s6":
+                    with st.expander("Evidence"):
+                        if _nc_metrics is not None and not _nc_metrics.empty:
+                            render_beige_board("Non-computable metrics", _nc_metrics,
+                                columns={"METRIC_NAME": "Metric", "BLOCKING_REASON": "Blocking Reason"},
+                                subtitle="EVALUATION.METRIC_READINESS")
+                elif _sid2 == "s7":
+                    pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════

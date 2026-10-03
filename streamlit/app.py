@@ -240,7 +240,7 @@ button:focus-visible { outline-color: var(--accent) !important; box-shadow: 0 0 
 }
 @keyframes supplychainiq-spin { to { transform: rotate(360deg); } }
 .brand-row { display: flex; align-items: center; gap: 14px; }
-.brand-mark { width: 36px; height: 36px; border-radius: 8px; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: var(--accent) !important; color: #000; }
+.brand-mark { width: 36px; height: 36px; border-radius: 8px; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: var(--accent) !important; color: #000; letter-spacing: -0.04em; }
 .brand-name { font-size: 1.1rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
 .brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
 .live-pill { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); }
@@ -525,7 +525,7 @@ belize_rate = as_float(belize_row.iloc[0]["LOGISTICS_COST_RATE_PCT"]) if belize_
 # TOPBAR
 # ══════════════════════════════════════════════════════════════════════════════
 
-_h2 = '<div class="topbar"> <div class="brand-row"> <div class="brand-mark">🚚</div> <div> <div class="brand-name">SupplyChainIQ</div> <div class="brand-sub">Powered by CoCo</div> </div> </div> <div class="live-pill"><span class="live-dot"></span> LIVE &middot; SNOWFLAKE</div> </div>'
+_h2 = '<div class="topbar"> <div class="brand-row"> <div class="brand-mark">SQ</div> <div> <div class="brand-name">SupplyChainIQ</div> <div class="brand-sub">Powered by CoCo</div> </div> </div> <div class="live-pill"><span class="live-dot"></span> LIVE &middot; SNOWFLAKE</div> </div>'
 st.markdown(_h2, unsafe_allow_html=True)
 
 
@@ -1565,34 +1565,35 @@ with analyst_tab:
 
     # ── Analyst CSS ────────────────────────────────────────────────────────
     st.markdown("""<style>
-.an-hero{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:22px 24px 18px;margin-bottom:12px;}
-.an-eyebrow{color:var(--accent);font-size:.58rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;}
-.an-title{font-size:1.3rem;font-weight:800;color:var(--text);letter-spacing:-.03em;margin:4px 0 2px;}
-.an-sub{color:var(--muted);font-size:.78rem;line-height:1.5;max-width:600px;}
-.an-trust{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 4px;font-size:.7rem;color:var(--muted);}
-.an-trust span{color:var(--accent);}
-.an-presets{margin:8px 0 14px;}
-.an-preset-group{font-size:.6rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:8px 0 4px;}
-.an-q{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:10px 14px;margin-bottom:8px;}
+.an-header{margin-bottom:6px;}
+.an-title{font-size:1.35rem;font-weight:700;color:var(--text);letter-spacing:-.02em;margin:0 0 3px;}
+.an-subtitle{font-size:.82rem;color:var(--text-2);line-height:1.4;margin:0 0 2px;}
+.an-desc{font-size:.72rem;color:var(--muted);line-height:1.4;}
+.an-trust-strip{display:flex;gap:20px;flex-wrap:wrap;margin:8px 0 14px;font-size:.68rem;color:var(--muted);letter-spacing:.01em;}
+.an-trust-strip .an-ti{display:flex;align-items:center;gap:5px;}
+.an-trust-strip .an-tc{color:var(--accent);font-size:.72rem;font-weight:600;}
+.an-composer-wrap [data-testid="stForm"]{background:transparent !important;border:none !important;padding:0 !important;}
+.an-sg-label{font-size:.6rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:12px 0 5px;}
+.an-q{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:4px;padding:10px 14px;margin-bottom:8px;}
 .an-q-label{font-size:.55rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;}
 .an-q-text{font-size:.85rem;color:var(--text);line-height:1.4;}
-.an-answer{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin-bottom:8px;}
+.an-answer{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:8px;}
 .an-answer-label{font-size:.55rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
 .an-answer-body{font-size:.88rem;color:var(--text-2);line-height:1.6;}
-.an-metric{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 18px;margin-bottom:8px;}
-.an-metric-name{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
-.an-metric-value{font-size:1.4rem;font-weight:800;color:var(--accent);margin-bottom:4px;}
+.an-metric{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:6px;padding:12px 16px;margin-bottom:8px;}
+.an-metric-name{font-size:.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
+.an-metric-value{font-size:1.3rem;font-weight:700;color:var(--accent);margin-bottom:3px;}
 .an-metric-meta{font-size:.72rem;color:var(--muted);line-height:1.5;}
-.an-trust-panel{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;font-size:.78rem;color:var(--text-2);line-height:1.6;}
+.an-trust-panel{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:.75rem;color:var(--text-2);line-height:1.6;}
 .an-trust-panel strong{color:var(--text);}
-.an-refusal{background:var(--amber-soft);border:1px solid var(--amber);border-radius:8px;padding:14px 18px;margin-bottom:8px;}
+.an-refusal{background:var(--amber-soft);border:1px solid var(--amber);border-radius:6px;padding:12px 16px;margin-bottom:8px;}
 .an-refusal-label{font-size:.58rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;}
-.an-refusal-body{font-size:.85rem;color:var(--text-2);line-height:1.5;}
+.an-refusal-body{font-size:.82rem;color:var(--text-2);line-height:1.5;}
 .an-refusal-body strong{color:var(--text);}
 </style>""", unsafe_allow_html=True)
 
     # ── State management ──────────────────────────────────────────────────
-    _VER = "v5-analyst"
+    _VER = "v6-analyst"
     if st.session_state.get("_analyst_ver") != _VER:
         st.session_state["_analyst_ver"] = _VER
         st.session_state["cur_q"] = ""
@@ -1602,46 +1603,51 @@ with analyst_tab:
         if k not in st.session_state:
             st.session_state[k] = d
 
-    # ── Hero ──────────────────────────────────────────────────────────────
+    # ── Compact editorial header ──────────────────────────────────────────
     st.markdown(
-        '<div class="an-hero">'
-        '<div class="an-eyebrow">SupplyChainIQ Analyst</div>'
-        '<div class="an-title">Governed conversational intelligence for supply-chain decisions.</div>'
-        '<div class="an-sub">Ask across governed metrics, source boundaries and data readiness.</div>'
+        '<div class="an-header">'
+        '<div class="an-title">SupplyChainIQ Analyst</div>'
+        '<div class="an-subtitle">Governed conversational intelligence for supply-chain decisions.</div>'
+        '<div class="an-desc">Ask across governed metrics, source boundaries and data readiness.</div>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Composer ──────────────────────────────────────────────────────────
-    with st.form("analyst_form", clear_on_submit=True):
-        _default_q = st.session_state.get("preset_q", "")
-        if _default_q:
-            st.session_state["preset_q"] = ""
-        col_input, col_btn = st.columns([9, 1])
-        with col_input:
+    # ── Composer (st.form for Enter-to-submit) ────────────────────────────
+    _pending_preset = st.session_state.get("preset_q", "")
+    if _pending_preset:
+        st.session_state["analyst_input"] = _pending_preset
+        st.session_state["preset_q"] = ""
+
+    st.markdown('<div class="an-composer-wrap">', unsafe_allow_html=True)
+    with st.form("analyst_form", clear_on_submit=False):
+        _fc_input, _fc_btn = st.columns([9, 1])
+        with _fc_input:
             user_input = st.text_input(
-                "Query", value=_default_q,
+                "Query",
                 placeholder="Ask a supply-chain question...",
-                key="analyst_input", label_visibility="collapsed",
+                key="analyst_input",
+                label_visibility="collapsed",
             )
-        with col_btn:
-            submitted = st.form_submit_button("Ask \u2192", type="primary")
+        with _fc_btn:
+            submitted = st.form_submit_button("Ask", type="primary")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Trust row ─────────────────────────────────────────────────────────
+    # ── Trust strip ───────────────────────────────────────────────────────
     st.markdown(
-        '<div class="an-trust">'
-        '<span>\u2713</span> Governed metrics &nbsp; '
-        '<span>\u2713</span> Source-aware &nbsp; '
-        '<span>\u2713</span> Provenance-backed &nbsp; '
-        '<span>\u2713</span> Refuses unsupported analysis'
+        '<div class="an-trust-strip">'
+        '<div class="an-ti"><span class="an-tc">&check;</span> Governed metrics</div>'
+        '<div class="an-ti"><span class="an-tc">&check;</span> Source-aware</div>'
+        '<div class="an-ti"><span class="an-tc">&check;</span> Provenance-backed</div>'
+        '<div class="an-ti"><span class="an-tc">&check;</span> Refuses unsupported analysis</div>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Presets (outside form, fill only) ─────────────────────────────────
+    # ── Suggestion chips (outside form, fill-only) ────────────────────────
     if not st.session_state.cur_q:
         _presets = {
-            "Governed metrics": [
+            "Governed Metrics": [
                 "What is our enterprise on-time delivery rate?",
                 "What is our logistics cost rate?",
             ],
@@ -1654,17 +1660,15 @@ with analyst_tab:
                 "Join DataCo orders with SCMS shipments.",
             ],
         }
-        st.markdown('<div class="an-presets">', unsafe_allow_html=True)
-        for group_label, questions in _presets.items():
-            st.markdown(f'<div class="an-preset-group">{_html.escape(group_label)}</div>', unsafe_allow_html=True)
-            preset_cols = st.columns(len(questions))
-            for i, pq in enumerate(questions):
-                with preset_cols[i]:
-                    if st.button(pq, key=f"preset_{i}_{group_label}", use_container_width=True):
-                        st.session_state["preset_q"] = pq
-        st.markdown('</div>', unsafe_allow_html=True)
+        for _grp_label, _grp_qs in _presets.items():
+            st.markdown(f'<div class="an-sg-label">{_html.escape(_grp_label)}</div>', unsafe_allow_html=True)
+            _pcols = st.columns(len(_grp_qs))
+            for _pi, _pq in enumerate(_grp_qs):
+                with _pcols[_pi]:
+                    if st.button(_pq, key=f"preset_{_pi}_{_grp_label}", use_container_width=True):
+                        st.session_state["preset_q"] = _pq
 
-    # ── Submit handler + agent execution (single cycle) ─────────────────
+    # ── Submit handler + agent execution (single path) ────────────────────
     _do_exec = False
     if submitted and user_input and user_input.strip():
         st.session_state.cur_q = user_input.strip()
@@ -1727,10 +1731,9 @@ with analyst_tab:
                 mid = _html.escape(m.get("METRIC_ID", ""))
                 mname = _html.escape(m.get("METRIC_NAME", ""))
                 mver = m.get("VERSION") or "1.0"
-                msrc = _html.escape(m.get("SOURCE_SYSTEM") or "—")
-                mgrain = _html.escape(m.get("GRAIN") or "—")
+                msrc = _html.escape(m.get("SOURCE_SYSTEM") or "\u2014")
+                mgrain = _html.escape(m.get("GRAIN") or "\u2014")
                 mdefn = _html.escape(m.get("DEFINITION") or "")
-                # Look up readiness for data quality
                 from readiness import get_readiness_for_metric
                 rdns = get_readiness_for_metric(m.get("METRIC_ID", ""), session)
                 dq_text = "No coverage issues recorded"
@@ -1741,31 +1744,29 @@ with analyst_tab:
                     else:
                         dq_text = f'{rdns.get("READINESS_STATUS", "")} \u00b7 {rdns.get("BLOCKING_REASON", "")}'
 
-                # Source boundary note
                 src_note = ""
                 if msrc == "DataCo":
                     src_note = '<div style="font-size:.68rem;color:var(--muted);margin-top:4px;">SCMS shipment data is maintained as a separate source island and does not contribute to this metric.</div>'
 
-                # Resolution label mapping
                 res_methods = prov_obj.get("provenance_resolution_method", [])
                 res_display = []
-                for rm in res_methods:
-                    if rm in ("SQL_EXPRESSION_MATCH", "COLUMN_SIGNATURE_MATCH"):
+                for rm_method in res_methods:
+                    if rm_method in ("SQL_EXPRESSION_MATCH", "COLUMN_SIGNATURE_MATCH"):
                         res_display.append("Deterministic SQL-based matching")
-                    elif rm == "ANSWER_TEXT_FALLBACK":
+                    elif rm_method == "ANSWER_TEXT_FALLBACK":
                         res_display.append("Matched from answer text (lower confidence)")
-                    elif rm == "UNRESOLVED":
+                    elif rm_method == "UNRESOLVED":
                         res_display.append("UNRESOLVED")
                     else:
-                        res_display.append(rm)
-                res_label = ", ".join(sorted(set(res_display))) if res_display else "—"
+                        res_display.append(rm_method)
+                res_label = ", ".join(sorted(set(res_display))) if res_display else "\u2014"
 
                 st.markdown(
                     f'<div class="an-metric">'
-                    f'<div class="an-metric-name">Governed Metric \u00b7 {mid} \u00b7 v{_html.escape(str(mver))}</div>'
+                    f'<div class="an-metric-name">{mid} \u00b7 v{_html.escape(str(mver))}</div>'
                     f'<div class="an-metric-value">{mname}</div>'
                     f'<div class="an-metric-meta">'
-                    f'{msrc} \u00b7 {mgrain} \u00b7 \u2713 Governed definition<br>'
+                    f'{msrc} \u00b7 {mgrain} \u00b7 Governed<br>'
                     f'{_html.escape(mdefn)}'
                     f'</div>'
                     f'{src_note}'
@@ -1773,7 +1774,6 @@ with analyst_tab:
                     unsafe_allow_html=True,
                 )
 
-                # ── Trust panel ──
                 sv = _html.escape(prov_obj.get("semantic_view") or "SUPPLYCHAINIQ_COCO_SV")
                 st.markdown(
                     f'<div class="an-trust-panel">'
@@ -1786,10 +1786,10 @@ with analyst_tab:
 
         # ── Refusal / readiness card ──
         if is_refusal or readiness_matches:
-            for rm in readiness_matches:
-                blocking = _html.escape(str(rm.get("BLOCKING_REASON", "")))
-                unlock = _html.escape(str(rm.get("WHAT_DATA_WOULD_UNLOCK", "")))
-                rname = _html.escape(rm.get("METRIC_NAME", ""))
+            for rm_match in readiness_matches:
+                blocking = _html.escape(str(rm_match.get("BLOCKING_REASON", "")))
+                unlock = _html.escape(str(rm_match.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                rname = _html.escape(rm_match.get("METRIC_NAME", ""))
                 st.markdown(
                     f'<div class="an-refusal">'
                     f'<div class="an-refusal-label">Data Readiness</div>'
@@ -1801,7 +1801,6 @@ with analyst_tab:
                     unsafe_allow_html=True,
                 )
             if not readiness_matches and is_refusal:
-                # Cross-source or other governance refusal
                 rules = prov_obj.get("applicable_rules", [])
                 if prov_obj.get("cross_source_detected") or rules:
                     st.markdown(
@@ -1825,13 +1824,13 @@ with analyst_tab:
                 st.code(psql, language="sql")
             else:
                 st.markdown("*No SQL captured for this response.*")
-            sv = prov_obj.get("semantic_view") or "—"
-            st.markdown(f"**Semantic model:** `{sv}`")
+            sv_prov = prov_obj.get("semantic_view") or "\u2014"
+            st.markdown(f"**Semantic model:** `{sv_prov}`")
             tables = prov_obj.get("tables_used", [])
             if tables:
                 st.markdown(f"**Tables:** {', '.join(tables)}")
 
-        # ── Clear button ──
+        # ── Clear ──
         if st.button("Clear", key="clear_analyst"):
             st.session_state.cur_q = ""
             st.session_state.cur_a = ""

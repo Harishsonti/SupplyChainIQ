@@ -358,8 +358,8 @@ def _load_all(_session):
     d["entity_rel"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ONTOLOGY.ENTITY_RELATIONSHIPS").to_pandas()
     d["metric_reg"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.METRIC_REGISTRY ORDER BY METRIC_ID").to_pandas()
     d["product"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.PRODUCT_CATEGORY_PERFORMANCE ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
-    d["ship_mode"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.SHIPPING_MODE_ANALYSIS ORDER BY SOURCE_SYSTEM, TOTAL_VALUE DESC").to_pandas()
-    d["top_cust"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.TOP_CUSTOMERS ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
+    d["ship_mode"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.ANALYTICS.SHIPPING_MODE_ANALYSIS ORDER BY SOURCE_SYSTEM, TOTAL_VALUE DESC LIMIT 10").to_pandas()
+    d["top_cust"] = _session.sql("SELECT CUSTOMER_FNAME || ' ' || CUSTOMER_LNAME AS CUSTOMER, TOTAL_SALES, TOTAL_PROFIT, ROUND(100.0 * TOTAL_PROFIT / NULLIF(TOTAL_SALES, 0), 1) AS MARGIN_PCT FROM SUPPLYCHAINIQ_COCO.ANALYTICS.TOP_CUSTOMERS ORDER BY TOTAL_SALES DESC LIMIT 10").to_pandas()
     d["eval_smoke_results"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) ORDER BY TEST_ID").to_pandas()
     d["eval_smoke_summary"] = _session.sql("SELECT RUN_ID, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.SEMANTIC_SMOKE_RESULTS ORDER BY TESTED_AT DESC LIMIT 1) GROUP BY RUN_ID").to_pandas()
     d["eval_bench_summary"] = _session.sql("SELECT RUN_ID, CATEGORY, COUNT(*) AS TESTS_EXECUTED, COUNT_IF(PASS_FLAG) AS TESTS_PASSED, COUNT_IF(NOT PASS_FLAG) AS TESTS_FAILED, ROUND(100.0 * COUNT_IF(PASS_FLAG) / NULLIF(COUNT(*), 0), 2) AS PASS_RATE_PCT FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS WHERE RUN_ID = (SELECT RUN_ID FROM SUPPLYCHAINIQ_COCO.EVALUATION.AGENT_BENCHMARK_RESULTS ORDER BY EVALUATED_AT DESC LIMIT 1) GROUP BY RUN_ID, CATEGORY ORDER BY CATEGORY").to_pandas()
@@ -552,124 +552,161 @@ analyst_tab, trust_tab, gov_tab, tower_tab, signals_tab, country_tab, supplier_t
 # ══════════════════════════════════════════════════════════════════════════════
 with tower_tab:
 
-    # ── Hero ──────────────────────────────────────────────────────────────────
-    _h4 = f'<div class="hero"> <div class="hero-title">Supply Chain Control Tower</div> <div class="hero-copy"> Two-source governed intelligence across DataCo e-commerce operations (2015-2018) and SCMS pharmaceutical logistics (2006-2015). All metrics governed by the semantic layer with full source attribution and outlier-inclusion policy. </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">On-Time Delivery</div> <div class="value">{otd:.1f}%</div> <div class="note">DataCo</div> </div> <div class="hero-kpi"> <div class="label">Delay Rate</div> <div class="value">{delay:.1f}%</div> <div class="note">DataCo</div> </div> <div class="hero-kpi"> <div class="label">Total Sales</div> <div class="value">${fmt_val(total_sales)}</div> <div class="note">DataCo</div> </div> <div class="hero-kpi"> <div class="label">Logistics Rate</div> <div class="value">{logistics_rate:.1f}%</div> <div class="note">SCMS</div> </div> </div> </div>'
-    st.markdown(_h4, unsafe_allow_html=True)
+    # ── 1. Title row ─────────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Control Tower</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'DataCo orders and delivery, SCMS shipments and logistics. Governed metrics only.</div>',
+        unsafe_allow_html=True,
+    )
 
-    # ── Delivery Health ───────────────────────────────────────────────────────
-    render_section("Delivery Health", chip="DataCo")
+    # ── 2. ONE KPI row ───────────────────────────────────────────────────────
+    _ct_kpi = (
+        '<div class="enterprise-strip">'
+        f'<div class="es-item"><div class="es-label">On-Time Delivery</div><div class="es-value">{otd:.1f}%</div><div class="es-caption" style="color:var(--accent);">DataCo</div></div>'
+        f'<div class="es-item"><div class="es-label">Delay Rate</div><div class="es-value">{delay:.1f}%</div><div class="es-caption" style="color:var(--accent);">DataCo</div></div>'
+        f'<div class="es-item"><div class="es-label">Total Sales</div><div class="es-value">${fmt_val(total_sales)}</div><div class="es-caption" style="color:var(--accent);">DataCo &middot; {int(order_item_count):,} items</div></div>'
+        f'<div class="es-item"><div class="es-label">Profit Margin</div><div class="es-value">{profit_margin:.1f}%</div><div class="es-caption" style="color:var(--accent);">DataCo</div></div>'
+        f'<div class="es-item"><div class="es-label">Logistics Rate</div><div class="es-value">{logistics_rate:.1f}%</div><div class="es-caption" style="color:var(--amber);">SCMS</div></div>'
+        '</div>'
+    )
+    st.markdown(_ct_kpi, unsafe_allow_html=True)
 
-    d1, d2, d3, d4, d5 = st.columns(5)
-    d1.metric("On-Time Delivery", f"{otd:.2f}%")
-    d2.metric("Delay Rate", f"{delay:.2f}%")
-    d3.metric("Avg Delay", f"{avg_delay_days:.2f} days")
-    d4.metric("Distinct Orders", f"{order_count:,.0f}")
-    d5.metric("Order Items", f"{order_item_count:,.0f}")
-
+    # ── 3. Alert callout ─────────────────────────────────────────────────────
     if delay > 50:
-        _h5 = f'<div class="boundary"> <strong>Alert:</strong> Delay rate is {delay:.1f}% — more than half of non-cancelled order items were delivered late. This is a significant operational risk requiring investigation. </div>'
-        st.markdown(_h5, unsafe_allow_html=True)
-
-    # ── Commercial Performance ────────────────────────────────────────────────
-    render_section("Commercial Performance", chip="DataCo")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Sales", f"${total_sales:,.0f}")
-    c2.metric("Total Profit", f"${total_profit:,.0f}")
-    c3.metric("Profit Margin", f"{profit_margin:.2f}%")
-    c4.metric("Avg Order Value", f"${avg_order_val:,.0f}")
-
-    # Enterprise strip — commercial KPIs
-    render_kpi_strip([
-        ("Total Sales", f"${fmt_val(total_sales)}"),
-        ("Total Profit", f"${fmt_val(total_profit)}"),
-        ("Profit Margin", f"{profit_margin:.1f}%"),
-        ("Avg Order Value", f"${avg_order_val:,.0f}"),
-        ("Orders", f"{order_count:,.0f}"),
-        ("Order Items", f"{order_item_count:,.0f}"),
-    ])
-
-    # ── Product Category Breakdown ────────────────────────────────────────────
-    render_section("Top 10 Product Categories", chip="DataCo")
-
-    if not product_df.empty:
-        pc1, pc2, pc3 = st.columns(3)
-        pc1.metric("Product Categories", f"{product_count}")
-        top_cat = product_df.iloc[0]["CATEGORY_NAME"] if "CATEGORY_NAME" in product_df.columns else "N/A"
-        top_cat_sales = as_float(product_df.iloc[0]["TOTAL_SALES"]) if not product_df.empty else 0
-        pc2.metric("Top Category", str(top_cat))
-        pc3.metric("Top Category Sales", fmt_usd(top_cat_sales))
-
-        render_beige_board(
-            "Product Category Performance",
-            product_df,
-            subtitle="Sales, profit, and order volume by product category — DataCo source",
+        st.markdown(
+            f'<div class="boundary">Delay rate is above the 50% threshold ({delay:.1f}%).</div>',
+            unsafe_allow_html=True,
         )
 
-        if "CATEGORY_NAME" in product_df.columns and "TOTAL_SALES" in product_df.columns:
-            st.markdown('<div class="graph-board"><div class="graph-label">Sales by Product Category</div></div>', unsafe_allow_html=True)
-            chart_prod = product_df.head(10).set_index("CATEGORY_NAME")[["TOTAL_SALES"]]
-            st.bar_chart(chart_prod)
+    # ── 4. Two-column analytical area ────────────────────────────────────────
+    _ct_left, _ct_right = st.columns(2)
 
-    # ── Top Customers ─────────────────────────────────────────────────────────
-    render_section("Top 10 Customers by Sales", chip="DataCo")
+    with _ct_left:
+        st.markdown('<div class="section-title" style="font-size:0.92rem;">Delivery health</div>', unsafe_allow_html=True)
+        if not monthly_del_df.empty and "MONTH_START" in monthly_del_df.columns:
+            _ct_altair_ok = False
+            try:
+                import altair as alt
+                import pandas as _pd_ct
+                _trend = monthly_del_df[["MONTH_START", "ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]].copy()
+                _trend["MONTH_START"] = _pd_ct.to_datetime(_trend["MONTH_START"])
+                _trend_m = _trend.melt("MONTH_START", var_name="Metric", value_name="Pct")
+                _color_scale = alt.Scale(domain=["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"], range=["#3FB8A0", "#D9A441"])
+                _ct_chart = alt.Chart(_trend_m).mark_line(strokeWidth=2).encode(
+                    x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                    y=alt.Y("Pct:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+                    color=alt.Color("Metric:N", scale=_color_scale, legend=alt.Legend(title=None, orient="top")),
+                    tooltip=["MONTH_START:T", "Metric:N", alt.Tooltip("Pct:Q", format=".1f")],
+                ).properties(height=240)
+                _rule = alt.Chart({"values": [{"y": otd}]}).mark_rule(strokeDash=[4, 4], color="#3FB8A0", opacity=0.5).encode(y="y:Q")
+                st.altair_chart(_ct_chart + _rule, use_container_width=True)
+                _ct_altair_ok = True
+            except Exception:
+                pass
+            if not _ct_altair_ok:
+                st.line_chart(monthly_del_df.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=240)
+        else:
+            st.info("No delivery trend data.")
 
-    if not top_cust_df.empty:
-        _cust_cols = ["CUSTOMER_FULL_NAME", "TOTAL_SALES", "TOTAL_PROFIT", "PROFIT_MARGIN_PCT"] if all(c in top_cust_df.columns for c in ["CUSTOMER_FULL_NAME", "TOTAL_SALES", "TOTAL_PROFIT", "PROFIT_MARGIN_PCT"]) else list(top_cust_df.columns)
-        render_beige_board(
-            "Top 10 Customers",
-            top_cust_df[_cust_cols] if _cust_cols != list(top_cust_df.columns) else top_cust_df,
-            subtitle="Ranked by total sales — DataCo source",
-        )
-    else:
-        st.info("No customer data available.")
+    with _ct_right:
+        st.markdown('<div class="section-title" style="font-size:0.92rem;">Where the money comes from</div>', unsafe_allow_html=True)
+        if not product_df.empty and "CATEGORY_NAME" in product_df.columns and "TOTAL_SALES" in product_df.columns:
+            _ct_prod_ok = False
+            try:
+                import altair as alt
+                _pdata = product_df[["CATEGORY_NAME", "TOTAL_SALES"]].head(10).copy()
+                _pbars = alt.Chart(_pdata).mark_bar(cornerRadiusEnd=3).encode(
+                    y=alt.Y("CATEGORY_NAME:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+                    x=alt.X("TOTAL_SALES:Q", title="Sales ($)"),
+                    color=alt.value("#3FB8A0"),
+                    tooltip=["CATEGORY_NAME:N", alt.Tooltip("TOTAL_SALES:Q", format="$,.0f")],
+                ).properties(height=240)
+                _ptext = _pbars.mark_text(align="left", dx=3, fontSize=10).encode(
+                    text=alt.Text("TOTAL_SALES:Q", format="$,.0f"),
+                    color=alt.value("#E6EDF3"),
+                )
+                st.altair_chart(_pbars + _ptext, use_container_width=True)
+                _ct_prod_ok = True
+            except Exception:
+                pass
+            if not _ct_prod_ok:
+                st.bar_chart(product_df.head(10).set_index("CATEGORY_NAME")[["TOTAL_SALES"]], height=240)
+        else:
+            st.info("No product category data.")
 
-    # ── Shipping Mode Analysis ────────────────────────────────────────────────
-    render_section("Shipping Mode Analysis", chip="Both")
+    # ── 5. Two compact ranking tables ────────────────────────────────────────
+    _tbl_l, _tbl_r = st.columns(2)
 
-    if not ship_mode_df.empty:
-        with st.expander(f"View shipping modes ({len(ship_mode_df)})"):
+    with _tbl_l:
+        if not top_cust_df.empty:
             render_beige_board(
-                "Shipping Mode Performance",
-                ship_mode_df,
-                subtitle="Shipping mode metrics across both source systems",
+                "Top 10 customers by sales",
+                top_cust_df,
+                columns={"CUSTOMER": "Customer", "TOTAL_SALES": "Sales", "TOTAL_PROFIT": "Profit", "MARGIN_PCT": "Margin %"},
+                subtitle="DataCo source",
+                formats={"TOTAL_SALES": fmt_usd, "TOTAL_PROFIT": fmt_usd, "MARGIN_PCT": fmt_pct},
             )
+        else:
+            st.info("No customer data.")
 
-    # ── Logistics Performance ─────────────────────────────────────────────────
-    render_section("Logistics Performance", chip="SCMS")
+    with _tbl_r:
+        if not product_df.empty:
+            render_beige_board(
+                "Top 10 categories",
+                product_df,
+                columns={"CATEGORY_NAME": "Category", "TOTAL_SALES": "Sales", "TOTAL_PROFIT": "Profit", "PROFIT_MARGIN_PCT": "Margin %", "ON_TIME_DELIVERY_PCT": "OTD %"},
+                subtitle="DataCo source",
+                formats={"TOTAL_SALES": fmt_usd, "TOTAL_PROFIT": fmt_usd, "PROFIT_MARGIN_PCT": fmt_pct, "ON_TIME_DELIVERY_PCT": fmt_pct},
+            )
+        else:
+            st.info("No category data.")
 
-    l1, l2, l3, l4, l5 = st.columns(5)
-    l1.metric("Shipments", f"{shipment_count:,.0f}")
-    l2.metric("Shipment Value", f"${shipment_value:,.0f}")
-    l3.metric("Freight Cost", f"${freight_cost:,.0f}")
-    l4.metric("Logistics Rate", f"{logistics_rate:.2f}%")
-    l5.metric("Insurance", f"${insurance_cost:,.0f}")
-
-    # Logistics enterprise strip
+    # ── 6. Logistics (SCMS) strip ────────────────────────────────────────────
+    render_section("Logistics (SCMS)")
     render_kpi_strip([
         ("Shipments", f"{shipment_count:,.0f}"),
         ("Shipment Value", fmt_usd(shipment_value)),
         ("Freight Cost", fmt_usd(freight_cost)),
-        ("Insurance Cost", fmt_usd(insurance_cost)),
-        ("Logistics Rate", f"{logistics_rate:.1f}%"),
-        ("Null Freight %", f"{null_freight_pct:.0f}%"),
+        ("Insurance", fmt_usd(insurance_cost)),
     ])
+    st.markdown(
+        f'<div class="boundary">Freight cost is null for {null_freight_pct:.0f}% of shipments, so freight-based metrics are lower bounds.</div>',
+        unsafe_allow_html=True,
+    )
 
-    # ── Data Quality & Trust ──────────────────────────────────────────────────
-    render_section("Data Quality & Trust")
+    # ── 7. Data Quality compact cards ────────────────────────────────────────
+    render_section("Data Quality")
+    _dq1, _dq2 = st.columns(2)
+    with _dq1:
+        st.markdown(
+            f'<div class="card card-severity-info"><div class="card-title">DataCo</div>'
+            f'<div class="card-body"><strong>{int(order_item_count):,}</strong> order items &middot; '
+            f'0% null on key fields (sales, dates, delivery status).</div>'
+            f'<div class="card-source">DATA_QUALITY_SCORECARD</div></div>',
+            unsafe_allow_html=True,
+        )
+    with _dq2:
+        st.markdown(
+            f'<div class="card card-severity-warning"><div class="card-title">SCMS</div>'
+            f'<div class="card-body"><strong>{int(shipment_count):,}</strong> shipments &middot; '
+            f'Freight {null_freight_pct:.0f}% null &middot; Weight {as_float(dq_df[dq_df["SOURCE_SYSTEM"]=="SCMS"]["NULL_WEIGHT_PCT"].iloc[0]) if not dq_df.empty and "NULL_WEIGHT_PCT" in dq_df.columns and len(dq_df[dq_df["SOURCE_SYSTEM"]=="SCMS"]) > 0 else 0:.0f}% null.</div>'
+            f'<div class="card-source">DATA_QUALITY_SCORECARD</div></div>',
+            unsafe_allow_html=True,
+        )
+    with st.expander("View full Data Quality Scorecard"):
+        render_beige_board("Data Quality Scorecard", dq_df, subtitle="Coverage and completeness across source systems")
 
-    dq1, dq2 = st.columns(2)
-    with dq1:
-        _h6 = f'<div class="card card-severity-info"> <div class="card-title">DataCo Data Quality</div> <div class="card-body"> <strong>{int(order_item_count):,}</strong> order items loaded.<br> Key fields (sales, dates, delivery status) have <strong>0% null rate</strong>.<br> Full coverage of order, customer, product, and sales dimensions. </div> <div class="card-source">Source: DATA_QUALITY_SCORECARD &middot; DataCo</div> </div>'
-        st.markdown(_h6, unsafe_allow_html=True)
-    with dq2:
-        _h7 = f'<div class="card card-severity-warning"> <div class="card-title">SCMS Data Quality</div> <div class="card-body"> <strong>{int(shipment_count):,}</strong> shipments loaded.<br> Freight cost has a <strong>{null_freight_pct:.0f}% NULL rate</strong>.<br> All freight-based metrics understate true costs. This is a known constraint. </div> <div class="card-source">Source: DATA_QUALITY_SCORECARD &middot; SCMS</div> </div>'
-        st.markdown(_h7, unsafe_allow_html=True)
-
-    render_beige_board("Data Quality Scorecard", dq_df, subtitle="Coverage and completeness across source systems")
-
-    _h8 = f'<div class="boundary"> <strong>Data coverage note:</strong> SCMS freight cost has a {null_freight_pct:.0f}% NULL rate. All freight-based logistics metrics (logistics cost rate, freight per shipment) understate true costs. This is a known data-quality constraint, not an error. </div>'
-    st.markdown(_h8, unsafe_allow_html=True)
+    # ── 8. Shipping Mode expander ────────────────────────────────────────────
+    if not ship_mode_df.empty:
+        with st.expander("Shipping mode comparison"):
+            render_beige_board(
+                "Shipping Mode Performance",
+                ship_mode_df,
+                columns={"SOURCE_SYSTEM": "Source", "SHIPPING_MODE": "Mode", "LINE_COUNT": "Lines", "TOTAL_VALUE": "Value", "ON_TIME_DELIVERY_PCT": "OTD %"},
+                subtitle="Across both source systems",
+                formats={"TOTAL_VALUE": fmt_usd, "ON_TIME_DELIVERY_PCT": fmt_pct},
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

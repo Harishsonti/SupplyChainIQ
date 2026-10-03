@@ -235,6 +235,33 @@ SupplyChainIQ was developed iteratively using Snowflake CoCo CLI as the developm
 
 The prototype is deployed as a Streamlit-in-Snowflake application using the `@SUPPLYCHAINIQ_COCO.APP.STREAMLIT_STAGE` stage. The public prototype link is provided separately through the hackathon submission.
 
+## Analyst Governance and Trust Behavior
+
+The Analyst tab enforces governance rules at the UI layer, producing structured response cards based on the question and the Agent's response:
+
+**Metric refusal (DATA READINESS card).** When the user question names a non-computable metric (Fill Rate, Days of Inventory, Landed Cost, Inventory Turnover, Return Rate, Perfect Order Rate) and no SQL was generated, the Analyst renders one amber DATA READINESS card for the asked metric with its blocking reason and unlock requirement from EVALUATION.METRIC_READINESS. Other non-computable metrics mentioned only in the Agent's answer text are collapsed into an expander. Detection uses a case-insensitive alias map against the question text, not against the Agent's exact wording.
+
+**Cross-source boundary (GOVERNANCE BOUNDARY card).** When the question names both DataCo and SCMS and a join-intent verb (join, link, combine, merge, match, connect), or the answer explicitly refuses a row-level join, the Analyst renders one amber GOVERNANCE BOUNDARY card showing the UNSUPPORTED relationships from ONTOLOGY.RELATIONSHIP_GOVERNANCE and the allowed alternative: country-aggregate comparison via GEOGRAPHY_DIM. This card only renders when no SQL was generated -- a valid cross-source country-aggregate comparison that produces SQL is not treated as a boundary violation.
+
+**Provenance footer.** Governance refusals show "No SQL generated: this request was refused under governance." and "Semantic model: governance refusal (no model invoked)" instead of the generic no-SQL text used for other responses.
+
+**SCMS-exclusion note.** When multiple governed DataCo metric cards are displayed, the source-island exclusion note appears once after the card group rather than repeated on each card.
+
+DataCo and SCMS remain separate source islands. Cross-source comparison is performed only at defensible country-aggregate level.
+
+## Latest Prototype Updates
+
+- Question-aware metric refusal: DATA READINESS card targets the metric named in the question, not every metric mentioned in the Agent's answer
+- Governance boundary detection from question terms (DataCo + SCMS + join verb) and answer-text refusal language, independent of provenance resolver
+- SQL-generated guard prevents false-positive boundary cards on valid cross-source country-aggregate queries
+- SCMS-exclusion note rendered once per card group instead of per card
+- Red Team presentation uses chronological latest run (8/8 PASS from PHASE5_1_RERUN) with total history (16/16 across 3 runs)
+- Belize logistics rate resolved from dedicated query (311.05%, not 0%)
+- Supplier/site counts from authoritative dimension tables (73/88, not LIMIT 10)
+- Supplier concentration uses full SCMS shipment-value denominator (88.4%)
+- NULL logistics rates filtered from country and supplier cost-rate rankings
+- Certified metric readiness shows null coverage as a caveat, not a blocking reason
+
 ## Limitations
 
 - **No row-level cross-source join**: DataCo orders and SCMS shipments cannot be linked at the transaction level. Country-aggregate comparison is the only supported cross-source grain.

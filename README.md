@@ -175,13 +175,13 @@ Nine-tab decision interface deployed to Streamlit-in-Snowflake:
 |-----|---------|
 | **Analyst** | Governed conversational AI with Enter-to-submit, provenance, refusal behavior |
 | **Trust** | OTD variant disagreement analysis, persona consistency, metric readiness, red team |
-| **Governance** | Metric registry, relationship governance, ontology graph, readiness grid |
+| **Governance** | Metric registry, relationship governance, ontology graph, readiness matrix, OTD variants |
 | **Control Tower** | Executive KPIs, delivery and commercial charts, data quality |
 | **Decision Signals** | Ranked supply-chain exceptions ordered by severity |
 | **Country Intel** | Cross-source quadrant analysis, risk tiers, coverage |
 | **Supplier / Site** | Concentration analysis, cost-rate rankings with volume thresholds |
 | **Trends** | Monthly delivery, commercial, and logistics time series |
-| **Evaluation** | Smoke tests, provenance tests, test health |
+| **Evaluation & Trust Contract** | Smoke tests, provenance tests, test health (sub-tabs: Overview, Smoke Tests, Provenance, Details) |
 
 ## Repository Structure
 
@@ -219,9 +219,21 @@ streamlit/          Streamlit application (app.py, provenance, disagreement, rea
 - **Provenance**: Agent answers resolve to governed metrics with three-tier matching (SQL expression, column signature, answer text fallback)
 - **Red-team validation**: Adversarial test cases verify the Agent declines unsupported requests
 
-## Deployment
+## Try These Questions
 
-Prototype deployment is provided separately through the hackathon submission. The Streamlit application is deployed to Streamlit-in-Snowflake using the `@SUPPLYCHAINIQ_COCO.APP.STREAMLIT_STAGE` stage.
+These three queries demonstrate the core governance behavior in the Analyst tab:
+
+1. **"What is our enterprise on-time delivery rate?"** -- resolves to the governed OTD_PCT metric with source attribution and provenance
+2. **"Can you calculate Fill Rate?"** -- returns a data readiness explanation: Fill Rate is not computable from the available data
+3. **"Join DataCo orders with SCMS shipments."** -- triggers a governance boundary refusal: no row-level cross-source join key exists
+
+## Development with Snowflake CoCo CLI
+
+SupplyChainIQ was developed iteratively using Snowflake CoCo CLI as the development assistant. CoCo was used during the implementation and refinement of the Snowflake-native data model, ontology governance, semantic layer, Cortex Agent configuration, evaluation suite, and Streamlit application. Snowflake is the execution and data platform. The GitHub repository contains the resulting implementation and documentation.
+
+## Prototype
+
+The prototype is deployed as a Streamlit-in-Snowflake application using the `@SUPPLYCHAINIQ_COCO.APP.STREAMLIT_STAGE` stage. The public prototype link is provided separately through the hackathon submission.
 
 ## Limitations
 

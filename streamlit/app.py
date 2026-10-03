@@ -364,12 +364,12 @@ def _load_all(_session):
     d["risk"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 15").to_pandas()
     d["supplier"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
     d["supplier_25"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT, COUNTRIES_SERVED, SHIPMENT_LINE_COUNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 25").to_pandas()
-    d["supplier_costrate"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
+    d["supplier_costrate"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 AND LOGISTICS_COST_RATE_PCT IS NOT NULL ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
     d["supplier_below_thresh"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD WHERE SHIPMENT_VALUE_USD < 100000").to_pandas()
     d["site"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
     d["site_25"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT, COUNTRIES_SERVED, SHIPMENT_LINE_COUNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 25").to_pandas()
     d["site_top5"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 5").to_pandas()
-    d["site_costrate"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
+    d["site_costrate"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 AND LOGISTICS_COST_RATE_PCT IS NOT NULL ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
     d["site_below_thresh"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD WHERE SHIPMENT_VALUE_USD < 100000").to_pandas()
     d["monthly_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_DELIVERY_TREND ORDER BY MONTH_START").to_pandas()
     d["monthly_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_LOGISTICS_TREND ORDER BY MONTH_START").to_pandas()
@@ -391,7 +391,12 @@ def _load_all(_session):
     d["provenance_tests"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PROVENANCE_TESTS ORDER BY TEST_ID").to_pandas()
     d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC LIMIT 15").to_pandas()
     d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC LIMIT 15").to_pandas()
-    d["country_log_rate"] = _session.sql("SELECT COUNTRY, LOGISTICS_COST_RATE_PCT, SHIPMENT_COUNT, FREIGHT_COST_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 10").to_pandas()
+    d["country_log_rate"] = _session.sql("SELECT COUNTRY, LOGISTICS_COST_RATE_PCT, SHIPMENT_COUNT, FREIGHT_COST_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD WHERE LOGISTICS_COST_RATE_PCT IS NOT NULL ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 10").to_pandas()
+    d["belize_log"] = _session.sql("SELECT COUNTRY, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD WHERE COUNTRY = 'Belize'").to_pandas()
+    d["supplier_total_count"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.CORE.SUPPLIER_DIM").to_pandas()
+    d["site_total_count"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.CORE.MANUFACTURING_SITE_DIM").to_pandas()
+    d["cross_source_count"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD").to_pandas()
+    d["cross_source_both"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD WHERE SOURCE_COVERAGE = 'BOTH'").to_pandas()
     d["risk_high"] = _session.sql("SELECT COUNTRY, RISK_SIGNAL_COUNT, DELAY_RATE_PCT, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT WHERE RISK_TIER = 'HIGH' ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 10").to_pandas()
     d["risk_counts"] = _session.sql("SELECT RISK_TIER, COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT GROUP BY RISK_TIER").to_pandas()
     d["risk_medium"] = _session.sql("SELECT COUNTRY, RISK_SIGNAL_COUNT, DELAY_RATE_PCT, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT WHERE RISK_TIER = 'MEDIUM' ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 50").to_pandas()
@@ -439,6 +444,11 @@ provenance_tests_df = _data["provenance_tests"]
 country_del_df = _data["country_del"]
 country_log_df = _data["country_log"]
 country_log_rate_df = _data["country_log_rate"]
+belize_log_df = _data["belize_log"]
+supplier_total_count_df = _data["supplier_total_count"]
+site_total_count_df = _data["site_total_count"]
+cross_source_count_df = _data["cross_source_count"]
+cross_source_both_df = _data["cross_source_both"]
 risk_high_df = _data["risk_high"]
 risk_counts_df = _data["risk_counts"]
 risk_medium_df = _data["risk_medium"]
@@ -493,9 +503,9 @@ if not geo_df.empty:
     geo_dataco_only = int(cov_vc.get("DATACO_ONLY", 0))
     geo_scms_only = int(cov_vc.get("SCMS_ONLY", 0))
 
-# Supplier/site counts
-supplier_count = len(supplier_df) if not supplier_df.empty else 0
-site_count = len(site_df) if not site_df.empty else 0
+# Supplier/site counts (from authoritative dimension tables, not LIMIT 10)
+supplier_count = int(supplier_total_count_df.iloc[0]["CNT"]) if not supplier_total_count_df.empty else 0
+site_count = int(site_total_count_df.iloc[0]["CNT"]) if not site_total_count_df.empty else 0
 
 # Product/customer counts
 product_count = len(product_df) if not product_df.empty else 0
@@ -524,15 +534,23 @@ total_red_team = len(red_team_df) if not red_team_df.empty else 0
 red_team_passed = int(red_team_df["PASS_FLAG"].sum()) if not red_team_df.empty and "PASS_FLAG" in red_team_df.columns else 0
 red_team_failed = total_red_team - red_team_passed
 red_team_runs = red_team_df["RUN_ID"].nunique() if not red_team_df.empty and "RUN_ID" in red_team_df.columns else 0
+# Latest run (by timestamp in red_team_summary)
+_rt_latest_run = ""
+_rt_latest_cases = 0
+_rt_latest_passed = 0
+if not red_team_summary.empty:
+    _rt_last = red_team_summary.iloc[-1]
+    _rt_latest_run = str(_rt_last.get("RUN_ID", ""))
+    _rt_latest_cases = int(_rt_last.get("TOTAL_CASES", 0))
+    _rt_latest_passed = int(_rt_last.get("PASSED", 0))
 total_provenance_tests = len(provenance_tests_df) if not provenance_tests_df.empty else 0
 
 # Grand totals (all evaluation artifacts)
 grand_total_tests = total_tests + total_red_team + total_provenance_tests
 grand_total_passed = all_passed + red_team_passed + total_provenance_tests
 
-# Belize outlier
-belize_row = country_log_df[country_log_df["COUNTRY"] == "Belize"] if not country_log_df.empty else None
-belize_rate = as_float(belize_row.iloc[0]["LOGISTICS_COST_RATE_PCT"]) if belize_row is not None and not belize_row.empty else 0
+# Belize outlier (dedicated query, not from LIMIT 15 by shipment count)
+belize_rate = as_float(belize_log_df.iloc[0]["LOGISTICS_COST_RATE_PCT"]) if not belize_log_df.empty else 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -776,7 +794,7 @@ with signals_tab:
     _signals.append({"id": "s1", "title": "Delivery risk", "severity": _s1_sev,
         "metric": f"{delay:.1f}%", "metric_label": "delay rate",
         "body": f"The governed DataCo OTD rate is {otd:.1f}%. {delay:.1f}% of non-cancelled items were delivered late." + (" Exceeds 50% threshold." if delay > 50 else ""),
-        "source": "ENTERPRISE_DELIVERY_SCORECARD \u00b7 ON_TIME_DELIVERY_PCT"})
+        "source": "ENTERPRISE_DELIVERY_SCORECARD \u00b7 OTD_PCT"})
 
     # S2: Logistics Cost Anomaly
     _signals.append({"id": "s2", "title": "Logistics cost anomaly", "severity": "warning",
@@ -799,7 +817,7 @@ with signals_tab:
 
     # S5: Supplier Concentration
     _s5_top5_val = as_float(supplier_top5_df["SHIPMENT_VALUE_USD"].sum()) if not supplier_top5_df.empty else 0
-    _s5_total_val = as_float(supplier_df["SHIPMENT_VALUE_USD"].sum()) if not supplier_df.empty else 1
+    _s5_total_val = as_float(shipment_value)  # authoritative total from ENTERPRISE_LOGISTICS_SCORECARD
     _s5_pct = (_s5_top5_val / max(_s5_total_val, 1)) * 100
     _s5_sev = "warning" if _s5_pct > 50 else "info"
     _signals.append({"id": "s5", "title": "Supplier concentration", "severity": _s5_sev,
@@ -815,7 +833,7 @@ with signals_tab:
         for _, _ncr in _nc_metrics.iterrows():
             _nc_name = _html.escape(str(_ncr.get("METRIC_NAME", "")))
             _nc_reason = str(_ncr.get("BLOCKING_REASON", ""))
-            _nc_short = _html.escape(_nc_reason[:80] + ("..." if len(_nc_reason) > 80 else "")) if _nc_reason else "\u2014"
+            _nc_short = _html.escape(_nc_reason[:80].rsplit(" ", 1)[0] + "...") if _nc_reason and len(_nc_reason) > 80 else (_html.escape(_nc_reason) if _nc_reason else "\u2014")
             _nc_list += f"<br>\u2022 <strong>{_nc_name}</strong> \u2014 {_nc_short}"
     _signals.append({"id": "s6", "title": "Non-computable metrics", "severity": "warning",
         "metric": f"{_nc_count}", "metric_label": "metrics blocked",
@@ -1065,7 +1083,7 @@ with country_tab:
                 f'<div style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;">'
                 f'Country-aggregate comparison only. No row-level join between DataCo and SCMS. '
                 f'Quadrants use live medians: Delay {_med_delay:.1f}% \u00b7 Logistics {_med_logistics:.1f}%. '
-                f'{len(_both_df)} countries in both sources.</div>',
+                f'{len(_both_df)} countries with both delay and logistics data plotted (GEOGRAPHY_DIM: {len(geo_df)} canonical, {geo_both} in both systems).</div>',
                 unsafe_allow_html=True,
             )
 
@@ -2125,7 +2143,7 @@ with gov_tab:
                 _runlock = str(_rr.get("WHAT_DATA_WOULD_UNLOCK", ""))
                 if _rs == "Certified":
                     _rbadge = f'<span style="color:var(--accent);font-weight:700;">Certified</span>'
-                    _reason = f'{_rnull:.0f}% null coverage'
+                    _reason = f'Caveat: {_rnull:.0f}% null (excluded)' if _rnull > 0 else '\u2014'
                 else:
                     _rbadge = f'<span style="color:var(--amber);font-weight:700;">Blocked</span>'
                     _reason = _html.escape(_rblock[:100] + ("..." if len(_rblock) > 100 else "")) if _rblock and _rblock != "None" else "\u2014"
@@ -2343,7 +2361,8 @@ with trust_tab:
                 _pv = as_float(_pr.get("RESOLVED_VALUE", 0))
                 _pm = _pr.get("MATCHES_GOVERNED", False)
                 _pc = "var(--accent)" if _pm else "var(--amber)"
-                _pd = _html.escape(str(_pr.get("PERSONA_DESCRIPTION", ""))[:80])
+                _pd_full = str(_pr.get("PERSONA_DESCRIPTION", ""))
+                _pd = _html.escape(_pd_full[:80].rsplit(" ", 1)[0] + "..." if len(_pd_full) > 80 else _pd_full)
                 st.markdown(
                     f'<div class="card" style="border-left:3px solid {_pc};text-align:center;">'
                     f'<div class="card-title" style="font-size:0.88rem;">{_pn}</div>'
@@ -2388,7 +2407,7 @@ with trust_tab:
             _rnull = as_float(_rr.get("NULL_COVERAGE_PCT", 0))
             if _rs == "Certified":
                 _rbadge = '<span style="color:var(--accent);font-weight:700;">Certified</span>'
-                _rreason = f'{_rnull:.0f}% null coverage' if _rnull > 0 else "\u2014"
+                _rreason = f'Caveat: {_rnull:.0f}% null coverage (excluded from aggregation)' if _rnull > 0 else "\u2014"
                 _runlock_d = "\u2014"
             else:
                 _rbadge = '<span style="color:var(--amber);font-weight:700;">Not Computable</span>'
@@ -2468,7 +2487,7 @@ with eval_tab:
         '<div class="enterprise-strip" style="margin-bottom:6px;">'
         f'<div class="es-item"><div class="es-label">Executable Tests</div><div class="es-value">{_ev_exec}</div></div>'
         f'<div class="es-item"><div class="es-label">Smoke Pass Rate</div><div class="es-value" style="color:var(--accent);">{pass_rate:.0f}%</div></div>'
-        f'<div class="es-item"><div class="es-label">Red Team Latest</div><div class="es-value">{red_team_passed}/{total_red_team} PASS</div></div>'
+        f'<div class="es-item"><div class="es-label">Red Team</div><div class="es-value">{red_team_passed}/{total_red_team} PASS</div><div class="es-caption">{red_team_runs} runs, latest {_rt_latest_passed}/{_rt_latest_cases}</div></div>'
         f'<div class="es-item"><div class="es-label">Provenance Tests</div><div class="es-value">{total_provenance_tests}</div></div>'
         '</div>'
     )

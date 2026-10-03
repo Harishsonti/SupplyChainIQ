@@ -371,6 +371,9 @@ def _load_all(_session):
     d["country_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD ORDER BY ORDER_ITEM_COUNT DESC LIMIT 15").to_pandas()
     d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC LIMIT 15").to_pandas()
     d["geo"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME").to_pandas()
+    d["otd_variants"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.OTD_VARIANT_REGISTRY ORDER BY VARIANT_ID").to_pandas()
+    d["persona_otd"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.PERSONA_OTD_CONSISTENCY ORDER BY PERSONA").to_pandas()
+    d["metric_readiness"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.METRIC_READINESS ORDER BY METRIC_ID").to_pandas()
     return d
 
 _data = _load_all(session)
@@ -401,6 +404,9 @@ provenance_tests_df = _data["provenance_tests"]
 country_del_df = _data["country_del"]
 country_log_df = _data["country_log"]
 geo_df = _data["geo"]
+otd_variants_df = _data["otd_variants"]
+persona_otd_df = _data["persona_otd"]
+metric_readiness_df = _data["metric_readiness"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -505,9 +511,8 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.markdown('<div class="sidebar-heading">Trust Contract</div>', unsafe_allow_html=True)
-    # Live counts from evaluation tables
-    _otd_var_count = 5  # OTD_VARIANT_REGISTRY is always 5
-    _readiness_count = 14  # METRIC_READINESS is always 14
+    _otd_var_count = len(otd_variants_df) if not otd_variants_df.empty else 0
+    _readiness_count = len(metric_readiness_df) if not metric_readiness_df.empty else 0
     st.markdown(
         f'<div style="font-size:0.72rem;color:var(--text-2);line-height:1.7;">'
         f'<strong style="color:var(--accent);">{grand_total_tests}</strong> executable tests '
@@ -529,16 +534,16 @@ with st.sidebar:
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-analyst_tab, eval_tab, gov_tab, disagree_tab, tower_tab, signals_tab, country_tab, supplier_tab, trends_tab = st.tabs([
+analyst_tab, trust_tab, gov_tab, tower_tab, signals_tab, country_tab, supplier_tab, trends_tab, eval_tab = st.tabs([
     "Analyst",
-    "Evaluation",
+    "Trust",
     "Governance",
-    "Disagreement",
     "Control Tower",
     "Decision Signals",
     "Country Intel",
     "Supplier / Site",
     "Trends",
+    "Evaluation & Trust Contract",
 ])
 
 
@@ -1368,48 +1373,101 @@ with gov_tab:
     render_section("Entity Relationship Graph")
     st.markdown(
         '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:12px;">'
-        'Governed entity relationships. Green solid = supported join. Red dashed = unsupported (no row-level key). '
+        'Governed entity relationships generated from live ontology tables. '
+        'Teal solid = supported join. Red dashed = blocked (no row-level key). '
         'DataCo and SCMS are independent source systems — country-aggregate comparison only.</div>',
         unsafe_allow_html=True,
     )
 
-    _ontology_dot = """digraph G {
-    rankdir=TB;
-    bgcolor="transparent";
-    node [shape=box, style="filled,rounded", fontname="Helvetica", fontsize=10, fillcolor="#2a2a2a", fontcolor="#e8dcc8", color="#4a4a4a"];
-    edge [fontname="Helvetica", fontsize=8];
+    # Build DOT dynamically from ENTITY_CATALOG + RELATIONSHIP_GOVERNANCE
+    _dataco_ents = set()
+    _scms_ents = set()
+    _bridge_ents = set()
+    if not entity_cat_df.empty and "SOURCE_SYSTEM" in entity_cat_df.columns:
+        for _, _ec in entity_cat_df.iterrows():
+            _ename = str(_ec.get("ENTITY_NAME", "")).strip()
+            _esrc = str(_ec.get("SOURCE_SYSTEM", "")).upper()
+            if "BOTH" in _esrc or "CONFORMED" in _esrc:
+                _bridge_ents.add(_ename)
+            elif "DATACO" in _esrc:
+                _dataco_ents.add(_ename)
+            elif "SCMS" in _esrc:
+                _scms_ents.add(_ename)
+            else:
+                _bridge_ents.add(_ename)
+    _all_ents = _dataco_ents | _scms_ents | _bridge_ents
+    if not rel_gov_df.empty:
+        for _, _rg in rel_gov_df.iterrows():
+            for _ecol in ("SUBJECT_ENTITY", "OBJECT_ENTITY"):
+                _en = str(_rg.get(_ecol, "")).strip()
+                if _en and _en not in _all_ents:
+                    _bridge_ents.add(_en)
+                    _all_ents.add(_en)
 
-    subgraph cluster_dataco {
-        label="DataCo"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#6b9e8a";
-        style=dashed; color="#6b9e8a";
-        CUSTOMER; ORDER; ORDER_ITEM; PRODUCT;
-    }
+    _dot_lines = [
+        'digraph G {',
+        '  rankdir=TB;',
+        '  bgcolor="transparent";',
+        '  node [shape=box,style="filled,rounded",fontname="Helvetica",fontsize=10,fillcolor="#171C21",fontcolor="#E6EDF3",color="#232A31"];',
+        '  edge [fontname="Helvetica",fontsize=8];',
+    ]
+    if _dataco_ents:
+        _dot_lines.append('  subgraph cluster_dataco {')
+        _dot_lines.append('    label="DataCo"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#3FB8A0"; style=dashed; color="#3FB8A0";')
+        for _e in sorted(_dataco_ents):
+            _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
+            _dot_lines.append(f'    {_e} [label="{_lbl}"];')
+        _dot_lines.append('  }')
+    if _scms_ents:
+        _dot_lines.append('  subgraph cluster_scms {')
+        _dot_lines.append('    label="SCMS"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#D9A441"; style=dashed; color="#D9A441";')
+        for _e in sorted(_scms_ents):
+            _lbl = "MFG SITE" if _e == "MANUFACTURING_SITE" else _e.replace("_", " ")
+            _dot_lines.append(f'    {_e} [label="{_lbl}"];')
+        _dot_lines.append('  }')
+    for _e in sorted(_bridge_ents):
+        _lbl = _e.replace("_", " ")
+        _dot_lines.append(f'  {_e} [fillcolor="#232A31",label="{_lbl}\\n(Bridge)"];')
+    if not rel_gov_df.empty:
+        for _, _rg in rel_gov_df.iterrows():
+            _s = str(_rg.get("SUBJECT_ENTITY", "")).strip()
+            _o = str(_rg.get("OBJECT_ENTITY", "")).strip()
+            _st = str(_rg.get("STATUS", "")).upper()
+            _is_bridge = (_s in _bridge_ents or _o in _bridge_ents) and not (_s in _bridge_ents and _o in _bridge_ents)
+            if _st == "SUPPORTED":
+                if _is_bridge:
+                    _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5,label="country\\naggregate",fontcolor="#3FB8A0"];')
+                else:
+                    _dot_lines.append(f'  {_s} -> {_o} [color="#3FB8A0",penwidth=1.5];')
+            else:
+                _dot_lines.append(f'  {_s} -> {_o} [color="#E5534B",style=dashed,penwidth=1.5,label="blocked",fontcolor="#E5534B"];')
+    _dot_lines.append('}')
+    _ontology_dot = '\n'.join(_dot_lines)
 
-    subgraph cluster_scms {
-        label="SCMS"; labeljust=l; fontname="Helvetica"; fontsize=10; fontcolor="#e8ae55";
-        style=dashed; color="#e8ae55";
-        SUPPLIER; MANUFACTURING_SITE [label="MFG SITE"]; SHIPMENT; LOGISTICS;
-    }
-
-    GEOGRAPHY [fillcolor="#3a3a3a", label="GEOGRAPHY\\n(Both)"];
-
-    CUSTOMER -> ORDER [color="#6b9e8a", penwidth=1.5];
-    ORDER -> ORDER_ITEM [color="#6b9e8a", penwidth=1.5];
-    PRODUCT -> ORDER_ITEM [color="#6b9e8a", penwidth=1.5];
-    SUPPLIER -> SHIPMENT [color="#6b9e8a", penwidth=1.5];
-    MANUFACTURING_SITE -> SHIPMENT [color="#6b9e8a", penwidth=1.5];
-    SHIPMENT -> LOGISTICS [color="#6b9e8a", penwidth=1.5];
-    SHIPMENT -> GEOGRAPHY [color="#6b9e8a", penwidth=1.5];
-    ORDER -> GEOGRAPHY [color="#6b9e8a", penwidth=1.5];
-
-    ORDER -> SHIPMENT [color="#cc3333", style=dashed, penwidth=1.5, label="NO JOIN KEY", fontcolor="#cc3333"];
-    SUPPLIER -> ORDER [color="#cc3333", style=dashed, penwidth=1.5];
-    PRODUCT -> SHIPMENT [color="#cc3333", style=dashed, penwidth=1.5];
-}"""
-    try:
-        st.graphviz_chart(_ontology_dot, use_container_width=True)
-    except Exception:
-        st.info("Graphviz rendering not available in this environment.")
+    _graphviz_ok = hasattr(st, "graphviz_chart")
+    if _graphviz_ok:
+        try:
+            st.graphviz_chart(_ontology_dot, use_container_width=True)
+        except Exception:
+            _graphviz_ok = False
+    if not _graphviz_ok:
+        # HTML/CSS two-island fallback
+        _dc_html = " ".join(f'<span class="entity-chip">{_html.escape(e)}</span>' for e in sorted(_dataco_ents))
+        _sc_html = " ".join(f'<span class="entity-chip" style="border-color:var(--amber);color:var(--amber);">{_html.escape(e)}</span>' for e in sorted(_scms_ents))
+        _br_html = " ".join(f'<span class="entity-chip" style="border-color:var(--text-2);color:var(--text-2);">{_html.escape(e)}</span>' for e in sorted(_bridge_ents))
+        _supp_count = len(rel_gov_df[rel_gov_df["STATUS"] == "SUPPORTED"]) if not rel_gov_df.empty else 0
+        _unsupp_count = len(rel_gov_df[rel_gov_df["STATUS"] != "SUPPORTED"]) if not rel_gov_df.empty else 0
+        _fallback = (
+            f'<div class="card card-severity-info" style="margin:10px 0;">'
+            f'<div class="card-title">Two-Island Ontology</div>'
+            f'<div class="card-body">'
+            f'<strong style="color:var(--accent);">DataCo</strong>: {_dc_html}<br><br>'
+            f'<strong style="color:var(--amber);">SCMS</strong>: {_sc_html}<br><br>'
+            f'<strong>Bridge</strong>: {_br_html}<br><br>'
+            f'{_supp_count} supported joins (teal) &middot; {_unsupp_count} blocked (red dashed)'
+            f'</div></div>'
+        )
+        st.markdown(_fallback, unsafe_allow_html=True)
 
     # ── Entity Catalog ────────────────────────────────────────────────────────
     render_section("Entity Catalog")
@@ -1535,15 +1593,200 @@ with gov_tab:
     _h25 = f'<div class="card card-severity-warning"> <div class="card-title">Outlier Inclusion Policy</div> <div class="card-body"> The SupplyChainIQ governance framework requires that <strong>all data points be included</strong> in analyses, even statistical outliers. Specifically:<br><br> &bull; <strong>Belize</strong> ({belize_rate:.0f}% logistics cost rate) must always be included in country-level analyses and surfaced explicitly to users<br> &bull; No data point may be silently excluded based on its being an outlier<br> &bull; The agent is trained to present outliers with context rather than filtering them out<br> &bull; Users can filter outliers themselves but the system must not do so automatically<br><br> This policy ensures transparency and prevents data manipulation through selective exclusion. </div> <div class="card-source">Governance: Outlier Inclusion Policy &middot; Enforced by agent + semantic layer</div> </div>'
     st.markdown(_h25, unsafe_allow_html=True)
 
-    # ── Data Readiness Scorecard ──────────────────────────────────────────────
-    render_readiness_scorecard(session, render_section, render_beige_board)
-
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 8 — METRIC DISAGREEMENT DETECTOR
+# TAB 2 — TRUST
 # ══════════════════════════════════════════════════════════════════════════════
-with disagree_tab:
-    render_disagreement_detector(session, render_section, render_beige_board)
+with trust_tab:
+
+    _h_trust = '<div class="hero"> <div class="hero-title">Trust</div> <div class="hero-copy"> Governed metric definitions, cross-persona consistency, data readiness, and adversarial test coverage. </div> </div>'
+    st.markdown(_h_trust, unsafe_allow_html=True)
+
+    # ── Metric Disagreement ──────────────────────────────────────────────────
+    render_section("Metric Disagreement", chip="OTD Variants")
+
+    if not otd_variants_df.empty:
+        governed_row = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] == "GOVERNED"]
+        governed_val = as_float(governed_row.iloc[0]["COMPUTED_VALUE"]) if not governed_row.empty else 0
+        alt_variants = otd_variants_df[otd_variants_df["GOVERNANCE_STATUS"] != "GOVERNED"]
+        if not alt_variants.empty and "DEVIATION_PCT" in alt_variants.columns:
+            max_dev_row = alt_variants.loc[alt_variants["DEVIATION_PCT"].abs().idxmax()]
+            alt_val = as_float(max_dev_row["COMPUTED_VALUE"])
+            st.markdown(
+                f'<div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:8px;">'
+                f'Same English metric, different numbers: {governed_val:.1f}% vs {alt_val:.1f}%.</div>',
+                unsafe_allow_html=True,
+            )
+
+        _altair_ok = False
+        try:
+            import altair as alt
+            chart_df = otd_variants_df[["VARIANT_NAME", "COMPUTED_VALUE", "GOVERNANCE_STATUS"]].copy()
+            chart_df["is_governed"] = chart_df["GOVERNANCE_STATUS"] == "GOVERNED"
+            bars = alt.Chart(chart_df).mark_bar(cornerRadiusEnd=3).encode(
+                y=alt.Y("VARIANT_NAME:N", sort="-x", title=None, axis=alt.Axis(labelLimit=280)),
+                x=alt.X("COMPUTED_VALUE:Q", title="OTD %", scale=alt.Scale(domain=[0, 50])),
+                color=alt.condition(alt.datum.is_governed, alt.value("#3FB8A0"), alt.value("#6B7782")),
+                tooltip=["VARIANT_NAME:N", alt.Tooltip("COMPUTED_VALUE:Q", format=".2f"), "GOVERNANCE_STATUS:N"],
+            ).properties(height=240)
+            text = bars.mark_text(align="left", dx=4, fontSize=11).encode(
+                text=alt.Text("COMPUTED_VALUE:Q", format=".2f"),
+                color=alt.value("#E6EDF3"),
+            )
+            st.altair_chart(bars + text, use_container_width=True)
+            _altair_ok = True
+        except Exception:
+            pass
+        if not _altair_ok:
+            _vbar_rows = ""
+            for _, vr in otd_variants_df.iterrows():
+                vname = _html.escape(str(vr.get("VARIANT_NAME", "")))
+                vval = as_float(vr.get("COMPUTED_VALUE", 0))
+                vstatus = str(vr.get("GOVERNANCE_STATUS", ""))
+                vcolor = "var(--accent)" if vstatus == "GOVERNED" else "var(--muted)"
+                pct_w = min(vval / 50 * 100, 100)
+                _vbar_rows += f'<div style="margin:4px 0;"><div style="font-size:0.72rem;color:var(--text-2);margin-bottom:2px;">{vname}</div><div style="background:var(--panel);border-radius:3px;height:22px;position:relative;"><div style="background:{vcolor};height:100%;width:{pct_w:.1f}%;border-radius:3px;"></div><span style="position:absolute;right:6px;top:2px;font-size:0.72rem;color:var(--text);">{vval:.2f}%</span></div></div>'
+            st.markdown(f'<div style="padding:8px 0;">{_vbar_rows}</div>', unsafe_allow_html=True)
+
+        v3_confirms = False
+        v5_confirms = False
+        for _, vrow in otd_variants_df.iterrows():
+            vid = str(vrow.get("VARIANT_ID", ""))
+            dev = as_float(vrow.get("DEVIATION_FROM_GOVERNED", 999))
+            if "V3" in vid and abs(dev) < 0.001:
+                v3_confirms = True
+            if "V5" in vid and abs(dev) < 0.1:
+                v5_confirms = True
+        _expl = "V1 (Governed) uses the categorical DELIVERY_STATUS field to determine on-time delivery, excluding cancelled orders."
+        if v3_confirms:
+            _expl += " V3 (Risk Flag Method) independently confirms V1 using a different field basis (LATE_DELIVERY_RISK binary flag) — exact convergence."
+        if v5_confirms:
+            _expl += " V5 (Days-Based) independently confirms V1 using numeric day comparison — divergence is only +0.01pp."
+        st.markdown(f'<div style="font-size:0.82rem;color:var(--text-2);line-height:1.5;margin:8px 0 16px;">{_expl}</div>', unsafe_allow_html=True)
+    else:
+        st.info("No OTD variant data available.")
+
+    # ── Persona Consistency ──────────────────────────────────────────────────
+    render_section("Persona Consistency")
+
+    if not persona_otd_df.empty:
+        _p_version = ""
+        _p_strip = '<div class="enterprise-strip">'
+        for _, pr in persona_otd_df.iterrows():
+            p_name = _html.escape(str(pr.get("PERSONA", "")))
+            p_val = as_float(pr.get("RESOLVED_VALUE", 0))
+            p_match = pr.get("MATCHES_GOVERNED", False)
+            p_vid = str(pr.get("PREFERRED_VARIANT_ID", ""))
+            if not _p_version and p_vid:
+                _p_version = p_vid
+            _p_icon = "\u2713" if p_match else "\u2717"
+            _p_color = "var(--accent)" if p_match else "var(--amber)"
+            _p_strip += (
+                f'<div class="es-item">'
+                f'<div class="es-label">{p_name}</div>'
+                f'<div class="es-value" style="color:{_p_color};">{p_val:.6f}%</div>'
+                f'<div class="es-caption" style="color:{_p_color};">{_p_icon} Governed</div>'
+                f'</div>'
+            )
+        _p_strip += '</div>'
+        st.markdown(_p_strip, unsafe_allow_html=True)
+        if _p_version:
+            st.markdown(
+                f'<div style="font-size:0.72rem;color:var(--muted);margin:4px 0 12px;">'
+                f'All personas resolve to {_html.escape(_p_version)} under the governed definition.</div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        st.info("No persona consistency data available.")
+
+    # ── Data Readiness Grid ──────────────────────────────────────────────────
+    render_section("Data Readiness Grid")
+
+    if not metric_readiness_df.empty:
+        _mr_certified = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] == "Certified"])
+        _mr_notcomp = len(metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"])
+        rc1, rc2, rc3 = st.columns(3)
+        rc1.metric("Total Metrics", f"{len(metric_readiness_df)}")
+        rc2.metric("Certified", f"{_mr_certified}")
+        rc3.metric("Not Computable", f"{_mr_notcomp}")
+
+        _mr_rows = ""
+        for _, mr in metric_readiness_df.iterrows():
+            _mr_name = _html.escape(str(mr.get("METRIC_NAME", "")))
+            _mr_src = _html.escape(str(mr.get("SOURCE_SYSTEM", "")))
+            _mr_status = str(mr.get("READINESS_STATUS", ""))
+            _mr_reason = str(mr.get("BLOCKING_REASON", "None"))
+            if _mr_reason in ("None", "") or not _mr_reason.strip():
+                _mr_reason = "\u2014"
+            else:
+                _mr_reason = _html.escape(_mr_reason[:120] + ("..." if len(_mr_reason) > 120 else ""))
+            if _mr_status == "Certified":
+                _mr_badge = f'<span style="color:var(--accent);font-weight:700;">{_html.escape(_mr_status)}</span>'
+            else:
+                _mr_badge = f'<span style="color:var(--amber);font-weight:700;">{_html.escape(_mr_status)}</span>'
+            _mr_rows += f'<tr><td>{_mr_name}</td><td>{_mr_src}</td><td>{_mr_badge}</td><td style="font-size:0.72rem;">{_mr_reason}</td></tr>'
+        _mr_html = (
+            '<div class="dark-board">'
+            '<div class="tbl-title">Metric Readiness</div>'
+            f'<div class="tbl-sub">{len(metric_readiness_df)} metrics assessed</div>'
+            '<div style="overflow-x:auto;max-height:500px;overflow-y:auto;">'
+            '<table class="dark-table"><thead><tr>'
+            '<th>Metric</th><th>Source</th><th>Status</th><th>Blocking Reason</th>'
+            '</tr></thead><tbody>'
+            f'{_mr_rows}'
+            '</tbody></table></div></div>'
+        )
+        st.markdown(_mr_html, unsafe_allow_html=True)
+    else:
+        st.info("No metric readiness data available.")
+
+    # ── Red Team Summary ─────────────────────────────────────────────────────
+    render_section("Red Team Summary")
+
+    if not red_team_df.empty:
+        _rt_latest_id = red_team_df["RUN_ID"].iloc[-1] if "RUN_ID" in red_team_df.columns else ""
+        _rt_latest = red_team_df[red_team_df["RUN_ID"] == _rt_latest_id]
+        _rt_latest_total = len(_rt_latest)
+        _rt_latest_passed = int(_rt_latest["PASS_FLAG"].sum()) if "PASS_FLAG" in _rt_latest.columns else 0
+
+        rts1, rts2, rts3 = st.columns(3)
+        rts1.metric("Total Case-Runs", f"{total_red_team}")
+        rts2.metric("Runs", f"{red_team_runs}")
+        rts3.metric("Latest Run", f"{_rt_latest_passed}/{_rt_latest_total} PASS")
+
+        st.markdown(
+            f'<div class="success-box">'
+            f'<strong>{total_red_team} case-runs across {red_team_runs} runs; latest run {_rt_latest_passed}/{_rt_latest_total} PASS</strong>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        if not _rt_latest.empty:
+            _rt_disp = _rt_latest.copy()
+            if "PASS_FLAG" in _rt_disp.columns:
+                _rt_disp["RESULT"] = _rt_disp["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
+            _rt_cols = {}
+            if "CATEGORY" in _rt_disp.columns:
+                _rt_cols["CATEGORY"] = "Case Class"
+            if "QUESTION" in _rt_disp.columns:
+                _rt_cols["QUESTION"] = "Question"
+            if "RESULT" in _rt_disp.columns:
+                _rt_cols["RESULT"] = "Result"
+            if _rt_cols:
+                render_beige_board(
+                    f"Latest Run: {_html.escape(str(_rt_latest_id))}",
+                    _rt_disp,
+                    columns=_rt_cols,
+                    subtitle=f"{_rt_latest_passed}/{_rt_latest_total} passed",
+                )
+
+        with st.expander("View full Red Team history"):
+            _rt_hist = red_team_df.copy()
+            if "PASS_FLAG" in _rt_hist.columns:
+                _rt_hist["RESULT"] = _rt_hist["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
+            render_beige_board("Red Team History", _rt_hist, subtitle=f"All {total_red_team} case-runs across {red_team_runs} runs")
+    else:
+        st.info("No red team results available.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1551,7 +1794,7 @@ with disagree_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with eval_tab:
 
-    _h26 = f'<div class="hero"> <div class="hero-title">Evaluation &amp; Trust Contract</div> <div class="hero-copy"> {grand_total_tests} executable test cases across smoke, red team, and provenance suites, plus 19 governance registry entries (OTD variants, readiness assessments). </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Smoke Tests</div> <div class="value">{total_smoke}</div> <div class="note">{smoke_passed} passed</div> </div> <div class="hero-kpi"> <div class="label">Red Team</div> <div class="value">{total_red_team}</div> <div class="note">{red_team_passed} passed &middot; {red_team_runs} runs</div> </div> <div class="hero-kpi"> <div class="label">Provenance</div> <div class="value">{total_provenance_tests}</div> <div class="note">Resolution tests</div> </div> <div class="hero-kpi"> <div class="label">Smoke Pass Rate</div> <div class="value">{pass_rate:.1f}%</div> <div class="note">Overall</div> </div> </div> </div>'
+    _h26 = f'<div class="hero"> <div class="hero-title">Evaluation &amp; Trust Contract</div> <div class="hero-copy"> {grand_total_tests} executable test cases across smoke, red team, and provenance suites, plus {_otd_var_count + _readiness_count} governance registry entries ({_otd_var_count} OTD variants, {_readiness_count} readiness assessments). </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Smoke Tests</div> <div class="value">{total_smoke}</div> <div class="note">{smoke_passed} passed</div> </div> <div class="hero-kpi"> <div class="label">Red Team</div> <div class="value">{total_red_team}</div> <div class="note">{red_team_passed} passed &middot; {red_team_runs} runs</div> </div> <div class="hero-kpi"> <div class="label">Provenance</div> <div class="value">{total_provenance_tests}</div> <div class="note">Resolution tests</div> </div> <div class="hero-kpi"> <div class="label">Smoke Pass Rate</div> <div class="value">{pass_rate:.1f}%</div> <div class="note">Overall</div> </div> </div> </div>'
     st.markdown(_h26, unsafe_allow_html=True)
 
     eval_overview, eval_smoke, eval_redteam, eval_provenance, eval_bench, eval_detail = st.tabs([
@@ -1754,9 +1997,8 @@ with eval_tab:
             )
         else:
             st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-                'Agent Benchmark Definitions: Not populated. The Red Team suite (shown in the Red Team tab) '
-                'provides the live agent governance verification for this project.</div>',
+                '<div style="color:var(--text-2);font-size:0.85rem;">'
+                'Agent benchmark definitions are covered by the Red Team suite.</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1832,7 +2074,7 @@ with eval_tab:
         # Test health summary
         render_section("Test Health Summary")
 
-        _h32 = f'<div class="card card-severity-{"info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"}"> <div class="card-title">Overall Test Health</div> <div class="card-body"> <strong>{grand_total_tests}</strong> evaluation artifacts across smoke, red team, provenance, and governance registry.<br> Smoke: {smoke_passed}/{total_smoke} passed ({(smoke_passed / max(total_smoke, 1) * 100):.1f}%)<br> Red Team: {red_team_passed}/{total_red_team} case-runs across {red_team_runs} runs<br> Provenance: {total_provenance_tests} resolution tests<br> Registry: 5 OTD variants + 14 readiness assessments<br><br> {"All systems nominal. Semantic layer and agent governance operating as expected." if pass_rate >= 95 else "Some tests require attention. Review failing tests for possible regressions." if pass_rate >= 80 else "Test suite degraded. Immediate investigation required."} </div> <div class="card-source">Source: EVALUATION schema &middot; Trust Contract</div> </div>'
+        _h32 = f'<div class="card card-severity-{"info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"}"> <div class="card-title">Overall Test Health</div> <div class="card-body"> <strong>{grand_total_tests}</strong> evaluation artifacts across smoke, red team, provenance, and governance registry.<br> Smoke: {smoke_passed}/{total_smoke} passed ({(smoke_passed / max(total_smoke, 1) * 100):.1f}%)<br> Red Team: {red_team_passed}/{total_red_team} case-runs across {red_team_runs} runs<br> Provenance: {total_provenance_tests} resolution tests<br> Registry: {_otd_var_count} OTD variants + {_readiness_count} readiness assessments<br><br> {"All systems nominal. Semantic layer and agent governance operating as expected." if pass_rate >= 95 else "Some tests require attention. Review failing tests for possible regressions." if pass_rate >= 80 else "Test suite degraded. Immediate investigation required."} </div> <div class="card-source">Source: EVALUATION schema &middot; Trust Contract</div> </div>'
         st.markdown(_h32, unsafe_allow_html=True)
 
 

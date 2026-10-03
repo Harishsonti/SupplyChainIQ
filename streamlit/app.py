@@ -2,10 +2,23 @@ import streamlit as st
 import json as _json
 import html as _html
 import decimal as _decimal
+import base64 as _b64
+import pathlib as _pathlib
 from snowflake.snowpark.context import get_active_session
 from provenance import parse_agent_response, build_provenance, render_provenance_card
 from disagreement import render_disagreement_detector
 from readiness import render_readiness_scorecard
+
+def _load_brand_mark():
+    try:
+        _logo_path = _pathlib.Path(__file__).parent / "supplychainiq_symbol.png"
+        _logo_bytes = _logo_path.read_bytes()
+        _logo_b64 = _b64.b64encode(_logo_bytes).decode()
+        return f'<img src="data:image/png;base64,{_logo_b64}" style="width:36px;height:36px;object-fit:contain;border-radius:6px;" alt="SQ">'
+    except Exception:
+        return '<div class="brand-mark-fallback">SQ</div>'
+
+_BRAND_MARK_HTML = _load_brand_mark()
 
 session = get_active_session()
 
@@ -240,7 +253,8 @@ button:focus-visible { outline-color: var(--accent) !important; box-shadow: 0 0 
 }
 @keyframes supplychainiq-spin { to { transform: rotate(360deg); } }
 .brand-row { display: flex; align-items: center; gap: 14px; }
-.brand-mark { width: 36px; height: 36px; border-radius: 8px; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: var(--accent) !important; color: #000; letter-spacing: -0.04em; }
+.brand-mark { width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.brand-mark-fallback { width: 36px; height: 36px; border-radius: 8px; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; justify-content: center; background: var(--accent) !important; color: #000; letter-spacing: -0.04em; }
 .brand-name { font-size: 1.1rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
 .brand-sub { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
 .live-pill { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--accent); background: var(--accent-soft); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); }
@@ -525,7 +539,7 @@ belize_rate = as_float(belize_row.iloc[0]["LOGISTICS_COST_RATE_PCT"]) if belize_
 # TOPBAR
 # ══════════════════════════════════════════════════════════════════════════════
 
-_h2 = '<div class="topbar"> <div class="brand-row"> <div class="brand-mark">SQ</div> <div> <div class="brand-name">SupplyChainIQ</div> <div class="brand-sub">Powered by CoCo</div> </div> </div> <div class="live-pill"><span class="live-dot"></span> LIVE &middot; SNOWFLAKE</div> </div>'
+_h2 = f'<div class="topbar"> <div class="brand-row"> <div class="brand-mark">{_BRAND_MARK_HTML}</div> <div> <div class="brand-name">SupplyChainIQ</div> <div class="brand-sub">Powered by CoCo</div> </div> </div> <div class="live-pill"><span class="live-dot"></span> LIVE &middot; SNOWFLAKE</div> </div>'
 st.markdown(_h2, unsafe_allow_html=True)
 
 

@@ -262,8 +262,8 @@ button:focus-visible { outline-color: var(--accent) !important; box-shadow: 0 0 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ── Tabs ─────────────────────────────────────────────────────────── */
-button[data-baseweb="tab"] { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; font-size: 0.78rem !important; font-weight: 600 !important; padding: 7px 16px !important; margin-right: 2px !important; }
-button[data-baseweb="tab"][aria-selected="true"] { background: var(--accent-soft) !important; color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; }
+button[data-baseweb="tab"] { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; font-size: 0.68rem !important; font-weight: 600 !important; letter-spacing: 0.06em !important; text-transform: uppercase !important; padding: 8px 14px !important; margin-right: 2px !important; }
+button[data-baseweb="tab"][aria-selected="true"] { background: var(--accent-soft) !important; color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; font-weight: 700 !important; }
 div[data-baseweb="tab-highlight"] { display: none !important; }
 div[data-baseweb="tab-border"] { display: none !important; }
 .stTabs [data-baseweb="tab-list"] { gap: 0 !important; }

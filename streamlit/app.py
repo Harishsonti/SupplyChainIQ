@@ -1884,12 +1884,14 @@ button[data-baseweb="tab"][aria-selected="true"] {
                 )
 
         # ── Refusal / readiness / governance boundary cards ──
-        # Detect cross-source join intent from question + answer
+        _q_lower = st.session_state.cur_q.lower()
+        _a_lower = answer_text.lower()
+        _has_sql = bool(prov_obj.get("physical_sql") or prov_obj.get("logical_sql"))
+
+        # Cross-source join boundary detection
         _dataco_terms = ["dataco"]
         _scms_terms = ["scms"]
         _join_terms = ["join", "link", "combine", "match", "merge", "connect"]
-        _q_lower = st.session_state.cur_q.lower()
-        _a_lower = answer_text.lower()
         _q_has_dataco = any(t in _q_lower for t in _dataco_terms)
         _q_has_scms = any(t in _q_lower for t in _scms_terms)
         _q_has_join = any(t in _q_lower for t in _join_terms)
@@ -1899,7 +1901,24 @@ button[data-baseweb="tab"][aria-selected="true"] {
         if prov_obj.get("cross_source_detected") or prov_obj.get("applicable_rules"):
             _is_cross_source_boundary = True
 
-        # Render governance boundary card (does NOT require is_refusal for question path)
+        # Question-level non-computable metric detection
+        _nc_aliases = {
+            "fill rate": "FILL_RATE",
+            "days of inventory": "DAYS_OF_INVENTORY",
+            "doi": "DAYS_OF_INVENTORY",
+            "landed cost": "LANDED_COST",
+            "inventory turnover": "INVENTORY_TURNOVER",
+            "return rate": "RETURN_RATE",
+            "perfect order": "PERFECT_ORDER_RATE",
+            "perfect order rate": "PERFECT_ORDER_RATE",
+        }
+        _asked_nc_ids = []
+        for _alias, _mid in _nc_aliases.items():
+            if _alias in _q_lower and _mid not in _asked_nc_ids:
+                _asked_nc_ids.append(_mid)
+        _is_metric_refusal = bool(_asked_nc_ids) and not _has_sql
+
+        # Render governance boundary card
         if _is_cross_source_boundary:
             _unsup_rules = [r for r in rel_gov_df.to_dict("records") if r.get("STATUS") == "UNSUPPORTED"] if not rel_gov_df.empty else []
             _boundary_body = '<strong>A row-level join between DataCo and SCMS is not supported.</strong><br>'
@@ -1917,36 +1936,26 @@ button[data-baseweb="tab"][aria-selected="true"] {
                 unsafe_allow_html=True,
             )
 
-        # Render readiness cards (non-computable metrics)
-        if readiness_matches and not _is_cross_source_boundary:
-            # Non-computable metric aliases for question-level detection
-            _nc_aliases = {
-                "fill rate": "FILL_RATE",
-                "days of inventory": "DAYS_OF_INVENTORY",
-                "doi": "DAYS_OF_INVENTORY",
-                "landed cost": "LANDED_COST",
-                "inventory turnover": "INVENTORY_TURNOVER",
-                "return rate": "RETURN_RATE",
-                "perfect order": "PERFECT_ORDER_RATE",
-                "perfect order rate": "PERFECT_ORDER_RATE",
-            }
-            _asked_ids = []
-            for _alias, _mid in _nc_aliases.items():
-                if _alias in _q_lower and _mid not in _asked_ids:
-                    _asked_ids.append(_mid)
-
-            if _asked_ids:
-                _primary = [rm for rm in readiness_matches if rm.get("METRIC_ID") in _asked_ids]
-                _secondary = [rm for rm in readiness_matches if rm.get("METRIC_ID") not in _asked_ids]
-                _primary.sort(key=lambda rm: _asked_ids.index(rm.get("METRIC_ID")) if rm.get("METRIC_ID") in _asked_ids else 999)
-            else:
-                _primary = readiness_matches
-                _secondary = []
+        # Render metric readiness cards
+        if _is_metric_refusal and not _is_cross_source_boundary:
+            # Query readiness for asked metrics directly from the cached dataframe
+            _mr_all = metric_readiness_df[metric_readiness_df["READINESS_STATUS"] != "Certified"] if not metric_readiness_df.empty else None
+            _primary_cards = []
+            _secondary_cards = []
+            if _mr_all is not None and not _mr_all.empty:
+                for _, _rr in _mr_all.iterrows():
+                    _rd = _rr.to_dict()
+                    if _rd.get("METRIC_ID") in _asked_nc_ids:
+                        _primary_cards.append(_rd)
+                    else:
+                        _secondary_cards.append(_rd)
+                _primary_cards.sort(key=lambda r: _asked_nc_ids.index(r.get("METRIC_ID")) if r.get("METRIC_ID") in _asked_nc_ids else 999)
 
             def _render_readiness_card(rm_item):
                 blocking = _html.escape(str(rm_item.get("BLOCKING_REASON", "")))
-                unlock = _html.escape(str(rm_item.get("WHAT_DATA_WOULD_UNLOCK", "")))
-                rname = _html.escape(rm_item.get("METRIC_NAME", ""))
+                unlock_raw = str(rm_item.get("WHAT_DATA_WOULD_UNLOCK", ""))
+                unlock = _html.escape(unlock_raw) if unlock_raw and unlock_raw != "None" else "\u2014"
+                rname = _html.escape(str(rm_item.get("METRIC_NAME", "")))
                 st.markdown(
                     f'<div class="an-refusal">'
                     f'<div class="an-refusal-label">Data Readiness</div>'
@@ -1958,12 +1967,28 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     unsafe_allow_html=True,
                 )
 
-            for _rm_p in _primary:
-                _render_readiness_card(_rm_p)
-            if _secondary:
-                with st.expander(f"Other non-computable metrics ({len(_secondary)})"):
-                    for _rm_s in _secondary:
-                        _render_readiness_card(_rm_s)
+            for _pc in _primary_cards:
+                _render_readiness_card(_pc)
+            if _secondary_cards:
+                with st.expander(f"Other non-computable metrics ({len(_secondary_cards)})"):
+                    for _sc in _secondary_cards:
+                        _render_readiness_card(_sc)
+        elif readiness_matches and not _is_cross_source_boundary and not _is_metric_refusal:
+            # Fallback: provenance-detected readiness matches (legacy path)
+            for rm_match in readiness_matches:
+                blocking = _html.escape(str(rm_match.get("BLOCKING_REASON", "")))
+                unlock = _html.escape(str(rm_match.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                rname = _html.escape(rm_match.get("METRIC_NAME", ""))
+                st.markdown(
+                    f'<div class="an-refusal">'
+                    f'<div class="an-refusal-label">Data Readiness</div>'
+                    f'<div class="an-refusal-body">'
+                    f'<strong>{rname}</strong> cannot currently be computed.<br>'
+                    f'<strong>Reason:</strong> {blocking}<br>'
+                    f'<strong>Required to unlock:</strong> {unlock}'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
 
         # ── Technical provenance ──
         with st.expander("Technical provenance"):
@@ -1973,14 +1998,14 @@ button[data-baseweb="tab"][aria-selected="true"] {
             psql = prov_obj.get("physical_sql")
             if psql:
                 st.code(psql, language="sql")
-            elif is_refusal or _is_cross_source_boundary:
+            elif is_refusal or _is_cross_source_boundary or _is_metric_refusal:
                 st.markdown("*No SQL generated: this request was refused under governance.*")
             else:
                 st.markdown("*No SQL captured for this response.*")
             sv_prov = prov_obj.get("semantic_view")
             if sv_prov:
                 st.markdown(f"**Semantic model:** `{sv_prov}`")
-            elif is_refusal or _is_cross_source_boundary:
+            elif is_refusal or _is_cross_source_boundary or _is_metric_refusal:
                 st.markdown("**Semantic model:** governance refusal (no model invoked)")
             else:
                 st.markdown("**Semantic model:** \u2014")

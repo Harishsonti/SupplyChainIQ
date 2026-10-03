@@ -1883,12 +1883,41 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     unsafe_allow_html=True,
                 )
 
-        # ── Refusal / readiness card ──
+        # ── Refusal / readiness card (question-aware filtering) ──
         if is_refusal or readiness_matches:
-            for rm_match in readiness_matches:
-                blocking = _html.escape(str(rm_match.get("BLOCKING_REASON", "")))
-                unlock = _html.escape(str(rm_match.get("WHAT_DATA_WOULD_UNLOCK", "")))
-                rname = _html.escape(rm_match.get("METRIC_NAME", ""))
+            # Non-computable metric aliases for question-level detection
+            _nc_aliases = {
+                "fill rate": "FILL_RATE",
+                "days of inventory": "DAYS_OF_INVENTORY",
+                "doi": "DAYS_OF_INVENTORY",
+                "landed cost": "LANDED_COST",
+                "inventory turnover": "INVENTORY_TURNOVER",
+                "return rate": "RETURN_RATE",
+                "perfect order": "PERFECT_ORDER_RATE",
+                "perfect order rate": "PERFECT_ORDER_RATE",
+            }
+            _q_lower = st.session_state.cur_q.lower()
+            _asked_ids = []
+            for _alias, _mid in _nc_aliases.items():
+                if _alias in _q_lower and _mid not in _asked_ids:
+                    _asked_ids.append(_mid)
+
+            if _asked_ids and readiness_matches:
+                _primary = [rm for rm in readiness_matches if rm.get("METRIC_ID") in _asked_ids]
+                _secondary = [rm for rm in readiness_matches if rm.get("METRIC_ID") not in _asked_ids]
+                # Preserve order from question
+                _primary.sort(key=lambda rm: _asked_ids.index(rm.get("METRIC_ID")) if rm.get("METRIC_ID") in _asked_ids else 999)
+            elif readiness_matches:
+                _primary = readiness_matches
+                _secondary = []
+            else:
+                _primary = []
+                _secondary = []
+
+            def _render_readiness_card(rm_item):
+                blocking = _html.escape(str(rm_item.get("BLOCKING_REASON", "")))
+                unlock = _html.escape(str(rm_item.get("WHAT_DATA_WOULD_UNLOCK", "")))
+                rname = _html.escape(rm_item.get("METRIC_NAME", ""))
                 st.markdown(
                     f'<div class="an-refusal">'
                     f'<div class="an-refusal-label">Data Readiness</div>'
@@ -1899,6 +1928,14 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
+
+            for _rm_p in _primary:
+                _render_readiness_card(_rm_p)
+            if _secondary:
+                with st.expander(f"Other non-computable metrics ({len(_secondary)})"):
+                    for _rm_s in _secondary:
+                        _render_readiness_card(_rm_s)
+
             if not readiness_matches and is_refusal:
                 rules = prov_obj.get("applicable_rules", [])
                 if prov_obj.get("cross_source_detected") or rules:
@@ -1921,10 +1958,17 @@ button[data-baseweb="tab"][aria-selected="true"] {
             psql = prov_obj.get("physical_sql")
             if psql:
                 st.code(psql, language="sql")
+            elif is_refusal:
+                st.markdown("*No SQL generated: this request was refused under governance.*")
             else:
                 st.markdown("*No SQL captured for this response.*")
-            sv_prov = prov_obj.get("semantic_view") or "\u2014"
-            st.markdown(f"**Semantic model:** `{sv_prov}`")
+            sv_prov = prov_obj.get("semantic_view")
+            if sv_prov:
+                st.markdown(f"**Semantic model:** `{sv_prov}`")
+            elif is_refusal:
+                st.markdown("**Semantic model:** governance refusal (no model invoked)")
+            else:
+                st.markdown("**Semantic model:** \u2014")
             tables = prov_obj.get("tables_used", [])
             if tables:
                 st.markdown(f"**Tables:** {', '.join(tables)}")

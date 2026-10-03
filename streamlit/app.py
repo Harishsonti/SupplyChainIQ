@@ -1883,8 +1883,42 @@ button[data-baseweb="tab"][aria-selected="true"] {
                     unsafe_allow_html=True,
                 )
 
-        # ── Refusal / readiness card (question-aware filtering) ──
-        if is_refusal or readiness_matches:
+        # ── Refusal / readiness / governance boundary cards ──
+        # Detect cross-source join intent from question + answer
+        _dataco_terms = ["order", "orders", "customer", "customers", "product", "products", "dataco", "sales", "delivery"]
+        _scms_terms = ["shipment", "shipments", "supplier", "suppliers", "site", "sites", "freight", "scms", "logistics"]
+        _join_terms = ["join", "link", "combine", "match", "merge", "connect", "integrate"]
+        _q_lower = st.session_state.cur_q.lower()
+        _a_lower = answer_text.lower()
+        _q_has_dataco = any(t in _q_lower for t in _dataco_terms)
+        _q_has_scms = any(t in _q_lower for t in _scms_terms)
+        _q_has_join = any(t in _q_lower for t in _join_terms)
+        _answer_refuses_join = ("row-level" in _a_lower and ("not supported" in _a_lower or "cannot" in _a_lower or "no shared" in _a_lower))
+        _is_cross_source_boundary = (_q_has_dataco and _q_has_scms and _q_has_join) or _answer_refuses_join
+        # Also use provenance detection if available
+        if prov_obj.get("cross_source_detected") or prov_obj.get("applicable_rules"):
+            _is_cross_source_boundary = True
+
+        # Render governance boundary card (independent of readiness_matches)
+        if _is_cross_source_boundary and is_refusal:
+            _unsup_rules = [r for r in rel_gov_df.to_dict("records") if r.get("STATUS") == "UNSUPPORTED"] if not rel_gov_df.empty else []
+            _boundary_body = '<strong>A row-level join between DataCo and SCMS is not supported.</strong><br>'
+            if _unsup_rules:
+                _boundary_body += '<br>'.join(
+                    f'{_html.escape(str(r.get("SUBJECT_ENTITY", "")))} \u2194 {_html.escape(str(r.get("OBJECT_ENTITY", "")))}: {_html.escape(str(r.get("EVIDENCE", "")))}'
+                    for r in _unsup_rules
+                )
+                _boundary_body += '<br>'
+            _boundary_body += '<strong>Allowed alternative:</strong> country-aggregate comparison via GEOGRAPHY_DIM.'
+            st.markdown(
+                f'<div class="an-refusal">'
+                f'<div class="an-refusal-label">Governance Boundary</div>'
+                f'<div class="an-refusal-body">{_boundary_body}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        # Render readiness cards (non-computable metrics)
+        if readiness_matches and not _is_cross_source_boundary:
             # Non-computable metric aliases for question-level detection
             _nc_aliases = {
                 "fill rate": "FILL_RATE",
@@ -1896,22 +1930,17 @@ button[data-baseweb="tab"][aria-selected="true"] {
                 "perfect order": "PERFECT_ORDER_RATE",
                 "perfect order rate": "PERFECT_ORDER_RATE",
             }
-            _q_lower = st.session_state.cur_q.lower()
             _asked_ids = []
             for _alias, _mid in _nc_aliases.items():
                 if _alias in _q_lower and _mid not in _asked_ids:
                     _asked_ids.append(_mid)
 
-            if _asked_ids and readiness_matches:
+            if _asked_ids:
                 _primary = [rm for rm in readiness_matches if rm.get("METRIC_ID") in _asked_ids]
                 _secondary = [rm for rm in readiness_matches if rm.get("METRIC_ID") not in _asked_ids]
-                # Preserve order from question
                 _primary.sort(key=lambda rm: _asked_ids.index(rm.get("METRIC_ID")) if rm.get("METRIC_ID") in _asked_ids else 999)
-            elif readiness_matches:
-                _primary = readiness_matches
-                _secondary = []
             else:
-                _primary = []
+                _primary = readiness_matches
                 _secondary = []
 
             def _render_readiness_card(rm_item):
@@ -1935,20 +1964,6 @@ button[data-baseweb="tab"][aria-selected="true"] {
                 with st.expander(f"Other non-computable metrics ({len(_secondary)})"):
                     for _rm_s in _secondary:
                         _render_readiness_card(_rm_s)
-
-            if not readiness_matches and is_refusal:
-                rules = prov_obj.get("applicable_rules", [])
-                if prov_obj.get("cross_source_detected") or rules:
-                    st.markdown(
-                        '<div class="an-refusal">'
-                        '<div class="an-refusal-label">Governance Boundary</div>'
-                        '<div class="an-refusal-body">'
-                        '<strong>This query requires a cross-source row-level join that is not supported.</strong><br>'
-                        'DataCo and SCMS are independent source systems with no shared row-level key.<br>'
-                        '<strong>Allowed alternative:</strong> country-aggregate comparison.'
-                        '</div></div>',
-                        unsafe_allow_html=True,
-                    )
 
         # ── Technical provenance ──
         with st.expander("Technical provenance"):

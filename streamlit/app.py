@@ -349,7 +349,14 @@ def _load_all(_session):
     d["country"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_CROSS_SOURCE_SCORECARD ORDER BY COUNTRY").to_pandas()
     d["risk"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 15").to_pandas()
     d["supplier"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
+    d["supplier_25"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT, COUNTRIES_SERVED, SHIPMENT_LINE_COUNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 25").to_pandas()
+    d["supplier_costrate"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
+    d["supplier_below_thresh"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD WHERE SHIPMENT_VALUE_USD < 100000").to_pandas()
     d["site"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 10").to_pandas()
+    d["site_25"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT, COUNTRIES_SERVED, SHIPMENT_LINE_COUNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 25").to_pandas()
+    d["site_top5"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 5").to_pandas()
+    d["site_costrate"] = _session.sql("SELECT SITE_NAME, SHIPMENT_VALUE_USD, FREIGHT_COST_USD, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD WHERE SHIPMENT_VALUE_USD >= 100000 ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 5").to_pandas()
+    d["site_below_thresh"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MANUFACTURING_SITE_SCORECARD WHERE SHIPMENT_VALUE_USD < 100000").to_pandas()
     d["monthly_del"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_DELIVERY_TREND ORDER BY MONTH_START").to_pandas()
     d["monthly_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.MONTHLY_LOGISTICS_TREND ORDER BY MONTH_START").to_pandas()
     d["dq"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.DATA_QUALITY_SCORECARD").to_pandas()
@@ -389,7 +396,14 @@ logistics_df = _data["logistics"]
 country_df = _data["country"]
 risk_df = _data["risk"]
 supplier_df = _data["supplier"]
+supplier_25_df = _data["supplier_25"]
+supplier_costrate_df = _data["supplier_costrate"]
+supplier_below_df = _data["supplier_below_thresh"]
 site_df = _data["site"]
+site_25_df = _data["site_25"]
+site_top5_df = _data["site_top5"]
+site_costrate_df = _data["site_costrate"]
+site_below_df = _data["site_below_thresh"]
 monthly_del_df = _data["monthly_del"]
 monthly_log_df = _data["monthly_log"]
 dq_df = _data["dq"]
@@ -1169,54 +1183,154 @@ with country_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with supplier_tab:
 
-    _h13 = f'<div class="hero"> <div class="hero-title">Supplier &amp; Site Intelligence</div> <div class="hero-copy"> SCMS pharmaceutical procurement analytics — vendor performance, manufacturing site metrics, and logistics cost analysis. All data from SCMS source only. </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Suppliers</div> <div class="value">{supplier_count}</div> <div class="note">SCMS</div> </div> <div class="hero-kpi"> <div class="label">Mfg Sites</div> <div class="value">{site_count}</div> <div class="note">SCMS</div> </div> <div class="hero-kpi"> <div class="label">Shipment Value</div> <div class="value">${fmt_val(shipment_value)}</div> <div class="note">total</div> </div> <div class="hero-kpi"> <div class="label">Freight Cost</div> <div class="value">${fmt_val(freight_cost)}</div> <div class="note">total</div> </div> </div> </div>'
-    st.markdown(_h13, unsafe_allow_html=True)
+    # ── Header ───────────────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Supplier / Site</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Vendor concentration and logistics cost efficiency. SCMS source only.</div>',
+        unsafe_allow_html=True,
+    )
 
-    sub_sup, sub_site = st.tabs(["Supplier Scorecard", "Manufacturing Sites"])
+    # ── KPI row ──────────────────────────────────────────────────────────────
+    _gov_log_rate = round(100.0 * as_float(freight_cost) / max(as_float(shipment_value), 1), 2)
+    _ss_kpi = (
+        '<div class="enterprise-strip">'
+        f'<div class="es-item"><div class="es-label">Suppliers</div><div class="es-value">{supplier_count}</div><div class="es-caption" style="color:var(--amber);">SCMS</div></div>'
+        f'<div class="es-item"><div class="es-label">Mfg Sites</div><div class="es-value">{site_count}</div><div class="es-caption" style="color:var(--amber);">SCMS</div></div>'
+        f'<div class="es-item"><div class="es-label">Shipment Value</div><div class="es-value">${fmt_val(shipment_value)}</div><div class="es-caption">total</div></div>'
+        f'<div class="es-item"><div class="es-label">Freight Cost</div><div class="es-value">${fmt_val(freight_cost)}</div><div class="es-caption">total</div></div>'
+        f'<div class="es-item"><div class="es-label">Logistics Rate (governed)</div><div class="es-value">{_gov_log_rate:.2f}%</div><div class="es-caption">SUM(freight)/SUM(value)</div></div>'
+        '</div>'
+    )
+    st.markdown(_ss_kpi, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:0.72rem;color:var(--muted);margin:4px 0 10px;">'
+        f'Freight is null for {null_freight_pct:.0f}% of shipments (live), so rates are lower bounds. '
+        f'Entity rates are supplier/site-level freight/value; the page KPI is the governed weighted rate.</div>',
+        unsafe_allow_html=True,
+    )
 
-    # ── Supplier Scorecard ────────────────────────────────────────────────────
+    # ── Sub-tabs ─────────────────────────────────────────────────────────────
+    sub_sup, sub_site = st.tabs(["Suppliers", "Manufacturing sites"])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SUPPLIERS
+    # ══════════════════════════════════════════════════════════════════════════
     with sub_sup:
-        render_section("Top 10 Suppliers", chip="SCMS")
+        # Concentration callout
+        _s5_val = as_float(supplier_top5_df["SHIPMENT_VALUE_USD"].sum()) if not supplier_top5_df.empty else 0
+        _s_total = as_float(shipment_value)
+        _s5_share = (_s5_val / max(_s_total, 1)) * 100
+        st.markdown(
+            f'<div class="boundary" style="font-size:0.82rem;">'
+            f'<strong>Top 5 suppliers = {_s5_share:.1f}% of shipment value</strong> '
+            f'(${fmt_val(_s5_val)} of ${fmt_val(_s_total)})</div>',
+            unsafe_allow_html=True,
+        )
 
+        # Top 10 chart
+        if not supplier_df.empty and "SUPPLIER" in supplier_df.columns:
+            try:
+                import altair as alt
+                _sup_ch = alt.Chart(supplier_df[["SUPPLIER", "SHIPMENT_VALUE_USD"]]).mark_bar(cornerRadiusEnd=3).encode(
+                    y=alt.Y("SUPPLIER:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+                    x=alt.X("SHIPMENT_VALUE_USD:Q", title="Shipment Value ($)"),
+                    color=alt.value("#3FB8A0"),
+                    tooltip=["SUPPLIER:N", alt.Tooltip("SHIPMENT_VALUE_USD:Q", format="$,.0f")],
+                ).properties(height=260)
+                st.altair_chart(_sup_ch, use_container_width=True)
+            except Exception:
+                st.bar_chart(supplier_df.set_index("SUPPLIER")[["SHIPMENT_VALUE_USD"]], height=260)
+
+        # Top 10 table
         if not supplier_df.empty:
-            sm1, sm2, sm3 = st.columns(3)
-            sm1.metric("Suppliers Shown", f"{len(supplier_df)}")
-            sm2.metric("Total Shipment Value", fmt_usd(as_float(supplier_df["SHIPMENT_VALUE_USD"].sum())))
-            sm3.metric("Avg Logistics Rate", fmt_pct(as_float(supplier_df["LOGISTICS_COST_RATE_PCT"].mean())))
-
             render_beige_board(
-                "Supplier Performance",
+                "Top 10 suppliers",
                 supplier_df,
-                subtitle="Top 10 suppliers by shipment value — SCMS source",
+                columns={"SUPPLIER": "Supplier", "SHIPMENT_VALUE_USD": "Shipment Value", "FREIGHT_COST_USD": "Freight",
+                         "LOGISTICS_COST_RATE_PCT": "Logistics Rate %", "COUNTRIES_SERVED": "Countries", "SHIPMENT_LINE_COUNT": "Lines"},
+                subtitle="By shipment value — SCMS source",
+                formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct},
             )
 
-            st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Suppliers by Shipment Value</div></div>', unsafe_allow_html=True)
-            chart_sup = supplier_df.head(10).set_index("SUPPLIER")[["SHIPMENT_VALUE_USD"]]
-            st.bar_chart(chart_sup)
-        else:
-            st.info("No supplier data available.")
-
-    # ── Manufacturing Sites ───────────────────────────────────────────────────
-    with sub_site:
-        render_section("Top 10 Manufacturing Sites", chip="SCMS")
-
-        if not site_df.empty:
-            si1, si2, si3 = st.columns(3)
-            si1.metric("Sites Shown", f"{len(site_df)}")
-            si2.metric("Total Shipment Value", fmt_usd(as_float(site_df["SHIPMENT_VALUE_USD"].sum())))
-            si3.metric("Avg Logistics Rate", fmt_pct(as_float(site_df["LOGISTICS_COST_RATE_PCT"].mean())))
-
+        # Highest cost-rate suppliers
+        _sup_below = int(supplier_below_df.iloc[0]["CNT"]) if not supplier_below_df.empty else 0
+        if not supplier_costrate_df.empty:
             render_beige_board(
-                "Manufacturing Site Performance",
-                site_df,
-                subtitle="Top 10 sites by shipment value — SCMS source",
+                "Highest cost-rate suppliers",
+                supplier_costrate_df,
+                columns={"SUPPLIER": "Supplier", "SHIPMENT_VALUE_USD": "Value", "FREIGHT_COST_USD": "Freight", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                subtitle=f"Min shipment-value threshold: $100K. {_sup_below} suppliers below threshold.",
+                formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct},
             )
 
-            st.markdown('<div class="graph-board"><div class="graph-label">Top 10 Sites by Shipment Value</div></div>', unsafe_allow_html=True)
-            chart_site = site_df.head(10).set_index("SITE_NAME")[["SHIPMENT_VALUE_USD"]]
-            st.bar_chart(chart_site)
-        else:
-            st.info("No site data available.")
+        # View more
+        if not supplier_25_df.empty and len(supplier_25_df) > 10:
+            with st.expander(f"View more suppliers ({len(supplier_25_df)})"):
+                render_beige_board("Suppliers by value", supplier_25_df,
+                    columns={"SUPPLIER": "Supplier", "SHIPMENT_VALUE_USD": "Value", "FREIGHT_COST_USD": "Freight",
+                             "LOGISTICS_COST_RATE_PCT": "Rate %", "COUNTRIES_SERVED": "Countries", "SHIPMENT_LINE_COUNT": "Lines"},
+                    subtitle="Top 25 by shipment value",
+                    formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct})
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # MANUFACTURING SITES
+    # ══════════════════════════════════════════════════════════════════════════
+    with sub_site:
+        # Concentration callout
+        _st5_val = as_float(site_top5_df["SHIPMENT_VALUE_USD"].sum()) if not site_top5_df.empty else 0
+        _st5_share = (_st5_val / max(_s_total, 1)) * 100
+        st.markdown(
+            f'<div class="boundary" style="font-size:0.82rem;">'
+            f'<strong>Top 5 sites = {_st5_share:.1f}% of shipment value</strong> '
+            f'(${fmt_val(_st5_val)} of ${fmt_val(_s_total)})</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Top 10 chart
+        if not site_df.empty and "SITE_NAME" in site_df.columns:
+            try:
+                import altair as alt
+                _sit_ch = alt.Chart(site_df[["SITE_NAME", "SHIPMENT_VALUE_USD"]]).mark_bar(cornerRadiusEnd=3).encode(
+                    y=alt.Y("SITE_NAME:N", sort="-x", title=None, axis=alt.Axis(labelLimit=200)),
+                    x=alt.X("SHIPMENT_VALUE_USD:Q", title="Shipment Value ($)"),
+                    color=alt.value("#3FB8A0"),
+                    tooltip=["SITE_NAME:N", alt.Tooltip("SHIPMENT_VALUE_USD:Q", format="$,.0f")],
+                ).properties(height=260)
+                st.altair_chart(_sit_ch, use_container_width=True)
+            except Exception:
+                st.bar_chart(site_df.set_index("SITE_NAME")[["SHIPMENT_VALUE_USD"]], height=260)
+
+        # Top 10 table
+        if not site_df.empty:
+            render_beige_board(
+                "Top 10 manufacturing sites",
+                site_df,
+                columns={"SITE_NAME": "Site", "SHIPMENT_VALUE_USD": "Shipment Value", "FREIGHT_COST_USD": "Freight",
+                         "LOGISTICS_COST_RATE_PCT": "Logistics Rate %", "COUNTRIES_SERVED": "Countries", "SHIPMENT_LINE_COUNT": "Lines"},
+                subtitle="By shipment value — SCMS source",
+                formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct},
+            )
+
+        # Highest cost-rate sites
+        _site_below = int(site_below_df.iloc[0]["CNT"]) if not site_below_df.empty else 0
+        if not site_costrate_df.empty:
+            render_beige_board(
+                "Highest cost-rate sites",
+                site_costrate_df,
+                columns={"SITE_NAME": "Site", "SHIPMENT_VALUE_USD": "Value", "FREIGHT_COST_USD": "Freight", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                subtitle=f"Min shipment-value threshold: $100K. {_site_below} sites below threshold.",
+                formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct},
+            )
+
+        # View more
+        if not site_25_df.empty and len(site_25_df) > 10:
+            with st.expander(f"View more sites ({len(site_25_df)})"):
+                render_beige_board("Sites by value", site_25_df,
+                    columns={"SITE_NAME": "Site", "SHIPMENT_VALUE_USD": "Value", "FREIGHT_COST_USD": "Freight",
+                             "LOGISTICS_COST_RATE_PCT": "Rate %", "COUNTRIES_SERVED": "Countries", "SHIPMENT_LINE_COUNT": "Lines"},
+                    subtitle="Top 25 by shipment value",
+                    formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct})
 
 
 # ══════════════════════════════════════════════════════════════════════════════

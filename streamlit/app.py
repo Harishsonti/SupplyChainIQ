@@ -2371,211 +2371,135 @@ with trust_tab:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TAB 9 — EVALUATION
+# TAB 9 — EVALUATION & TRUST CONTRACT
 # ══════════════════════════════════════════════════════════════════════════════
 with eval_tab:
 
-    _h26 = f'<div class="hero"> <div class="hero-title">Evaluation &amp; Trust Contract</div> <div class="hero-copy"> {grand_total_tests} executable test cases across smoke, red team, and provenance suites, plus {_otd_var_count + _readiness_count} governance registry entries ({_otd_var_count} OTD variants, {_readiness_count} readiness assessments). </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Smoke Tests</div> <div class="value">{total_smoke}</div> <div class="note">{smoke_passed} passed</div> </div> <div class="hero-kpi"> <div class="label">Red Team</div> <div class="value">{total_red_team}</div> <div class="note">{red_team_passed} passed &middot; {red_team_runs} runs</div> </div> <div class="hero-kpi"> <div class="label">Provenance</div> <div class="value">{total_provenance_tests}</div> <div class="note">Resolution tests</div> </div> <div class="hero-kpi"> <div class="label">Smoke Pass Rate</div> <div class="value">{pass_rate:.1f}%</div> <div class="note">Overall</div> </div> </div> </div>'
-    st.markdown(_h26, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Evaluation &amp; Trust Contract</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Executable validation contract behind SupplyChainIQ governed answers.</div>',
+        unsafe_allow_html=True,
+    )
 
-    eval_overview, eval_smoke, eval_redteam, eval_provenance, eval_bench, eval_detail = st.tabs([
-        "Overview", "Smoke Tests", "Red Team", "Provenance", "Agent Benchmarks", "Test Details"
+    # ── KPI row ──────────────────────────────────────────────────────────────
+    _ev_exec = total_smoke + total_red_team + total_provenance_tests
+    _ev_kpi = (
+        '<div class="enterprise-strip" style="margin-bottom:6px;">'
+        f'<div class="es-item"><div class="es-label">Executable Tests</div><div class="es-value">{_ev_exec}</div></div>'
+        f'<div class="es-item"><div class="es-label">Smoke Pass Rate</div><div class="es-value" style="color:var(--accent);">{pass_rate:.0f}%</div></div>'
+        f'<div class="es-item"><div class="es-label">Red Team Latest</div><div class="es-value">{red_team_passed}/{total_red_team} PASS</div></div>'
+        f'<div class="es-item"><div class="es-label">Provenance Tests</div><div class="es-value">{total_provenance_tests}</div></div>'
+        '</div>'
+    )
+    st.markdown(_ev_kpi, unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-size:0.68rem;color:var(--muted);margin-bottom:14px;">'
+        f'{_ev_exec} executable tests (smoke, red-team case-runs, provenance). '
+        f'{_otd_var_count} OTD variants and {_readiness_count} readiness assessments are registry entries, not tests.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Sub-tabs (no Red Team — lives in Trust) ──────────────────────────────
+    eval_overview, eval_smoke_tab, eval_prov_tab, eval_bench_tab, eval_detail_tab = st.tabs([
+        "Overview", "Smoke Tests", "Provenance", "Agent Benchmarks", "Details"
     ])
 
-    # ── Overview ──────────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # OVERVIEW
+    # ══════════════════════════════════════════════════════════════════════════
     with eval_overview:
-        render_section("Test Suite Summary")
-
-        ov1, ov2, ov3, ov4 = st.columns(4)
-        ov1.metric("Evaluation Artifacts", f"{grand_total_tests}")
-        ov2.metric("Smoke Passed", f"{smoke_passed}/{total_smoke}")
-        ov3.metric("Red Team Passed", f"{red_team_passed}/{total_red_team}")
-        ov4.metric("Smoke Pass Rate", f"{pass_rate:.1f}%")
-
-        render_kpi_strip([
-            ("Smoke Tests", f"{total_smoke}"),
-            ("Smoke Passed", f"{smoke_passed}"),
-            ("Red Team Cases", f"{total_red_team}"),
-            ("Red Team Runs", f"{red_team_runs}"),
-            ("Provenance Tests", f"{total_provenance_tests}"),
-            ("Bench Tests", f"{total_bench}"),
-        ])
+        # Suite summary cards
+        _suite_html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">'
+        _suite_html += (
+            f'<div class="card card-severity-info"><div class="card-title">Smoke</div>'
+            f'<div class="card-body">{smoke_passed}/{total_smoke} passed ({pass_rate:.0f}%)<br>'
+            f'<span style="font-size:0.72rem;color:var(--muted);">Validates core governed UI/semantic behavior.</span></div></div>'
+        )
+        _suite_html += (
+            f'<div class="card card-severity-info"><div class="card-title">Red Team</div>'
+            f'<div class="card-body">{red_team_passed}/{total_red_team} across {red_team_runs} runs<br>'
+            f'<span style="font-size:0.72rem;color:var(--muted);">Tests Agent governance boundaries and refusal behavior.</span></div></div>'
+        )
+        _suite_html += (
+            f'<div class="card card-severity-info"><div class="card-title">Provenance</div>'
+            f'<div class="card-body">{total_provenance_tests} resolution tests<br>'
+            f'<span style="font-size:0.72rem;color:var(--muted);">Tests whether answers resolve to governed metric evidence.</span></div></div>'
+        )
+        _suite_html += '</div>'
+        st.markdown(_suite_html, unsafe_allow_html=True)
 
         if pass_rate >= 95:
-            _h27 = f'<div class="success-box"> <strong>All suites healthy:</strong> {pass_rate:.1f}% smoke pass rate. {total_red_team} red team case-runs all passed. Semantic layer and agent governance operating within expectations. </div>'
-            st.markdown(_h27, unsafe_allow_html=True)
-        elif pass_rate >= 80:
-            _h28 = f'<div class="boundary"> <strong>Attention:</strong> Pass rate is {pass_rate:.1f}%. {all_failed} test(s) failed. Review failing tests for regressions. </div>'
-            st.markdown(_h28, unsafe_allow_html=True)
-        else:
-            _h29 = f'<div class="card card-severity-critical" style="margin:10px 0;"> <div class="card-title">Test Suite Degraded</div> <div class="card-body">Pass rate is {pass_rate:.1f}% — {all_failed} tests failed. Immediate investigation required.</div> </div>'
-            st.markdown(_h29, unsafe_allow_html=True)
-
-        if not eval_smoke_summary.empty:
-            render_section("Smoke Test Summary")
-            render_beige_board(
-                "Smoke Test Summary",
-                eval_smoke_summary,
-                subtitle="Aggregated smoke test results",
+            st.markdown(
+                f'<div class="success-box" style="font-size:0.82rem;">'
+                f'<strong>All suites healthy:</strong> {pass_rate:.1f}% smoke pass rate. '
+                f'{red_team_passed}/{total_red_team} red-team case-runs passed. '
+                f'Governance operating within expectations.</div>',
+                unsafe_allow_html=True,
             )
 
-        if not eval_bench_summary.empty:
-            render_section("Benchmark Summary by Category")
-            render_beige_board(
-                "Benchmark Summary by Category",
-                eval_bench_summary,
-                subtitle="Agent benchmark pass rates by test category",
-            )
+        st.markdown(
+            '<div style="font-size:0.78rem;color:var(--muted);margin-top:8px;">'
+            'Red Team evidence is presented in Trust.</div>',
+            unsafe_allow_html=True,
+        )
 
-    # ── Smoke Tests ───────────────────────────────────────────────────────────
-    with eval_smoke:
-        render_section("Semantic Smoke Test Results")
-
+    # ══════════════════════════════════════════════════════════════════════════
+    # SMOKE TESTS
+    # ══════════════════════════════════════════════════════════════════════════
+    with eval_smoke_tab:
         if not eval_smoke_results.empty:
-            # Create display-friendly PASS/FAIL column from PASS_FLAG boolean
-            smoke_display = eval_smoke_results.copy()
-            smoke_display["RESULT"] = smoke_display["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
-            pf_opts = ["PASS", "FAIL"]
-            sel_pf = st.multiselect("Filter by result", pf_opts, default=pf_opts, key="smoke_pf_flt")
-            filtered_smoke = smoke_display[smoke_display["RESULT"].isin(sel_pf)] if sel_pf else smoke_display
+            _sm1, _sm2, _sm3 = st.columns(3)
+            _sm1.metric("Total", f"{total_smoke}")
+            _sm2.metric("Passed", f"{smoke_passed}")
+            _sm_pct = (smoke_passed / max(total_smoke, 1)) * 100
+            _sm3.metric("Pass Rate", f"{_sm_pct:.1f}%")
 
-            if filtered_smoke.empty:
-                st.info("No test cases match the selected filter.")
-            es1, es2, es3 = st.columns(3)
-            es1.metric("Shown", f"{len(filtered_smoke)}")
-            es2.metric("Total Smoke Tests", f"{total_smoke}")
-            smoke_pct = (smoke_passed / max(total_smoke, 1)) * 100
-            es3.metric("Smoke Pass Rate", f"{smoke_pct:.1f}%")
-
-            render_beige_board(
-                "Smoke Test Results",
-                filtered_smoke,
-                subtitle="Individual semantic smoke test outcomes",
-            )
+            with st.expander(f"View smoke test results ({total_smoke})"):
+                _smoke_disp = eval_smoke_results.copy()
+                _smoke_disp["RESULT"] = _smoke_disp["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
+                render_beige_board("Smoke Tests", _smoke_disp,
+                    columns={"TEST_ID": "Test", "EXPECTED_VALUE": "Expected", "ACTUAL_VALUE": "Actual", "RESULT": "Result"},
+                    subtitle="Latest run")
 
             if smoke_failed > 0:
-                failed_smoke = smoke_display[smoke_display["RESULT"] == "FAIL"]
-                if not failed_smoke.empty:
-                    _h30 = f'<div class="boundary"> <strong>{smoke_failed} smoke test(s) failed.</strong> Review the failing tests below. </div>'
-                    st.markdown(_h30, unsafe_allow_html=True)
-                    render_beige_board(
-                        "Failed Smoke Tests",
-                        failed_smoke,
-                        subtitle="Smoke tests that did not pass — investigate for regressions",
-                    )
+                _failed = eval_smoke_results[~eval_smoke_results["PASS_FLAG"]].copy()
+                _failed["RESULT"] = "FAIL"
+                st.markdown(f'<div class="boundary"><strong>{smoke_failed} test(s) failed.</strong></div>', unsafe_allow_html=True)
+                render_beige_board("Failed Tests", _failed,
+                    columns={"TEST_ID": "Test", "EXPECTED_VALUE": "Expected", "ACTUAL_VALUE": "Actual"},
+                    subtitle="Investigate for regressions")
         else:
             st.info("No smoke test results available.")
 
-    # ── Red Team ─────────────────────────────────────────────────────────────
-    with eval_redteam:
-        render_section("Agent Red Team Results")
-
-        if not red_team_df.empty:
-            st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-                'Adversarial test cases designed to probe agent governance boundaries: metric accuracy, '
-                'two-island constraint enforcement, outlier inclusion, and non-computable metric refusal.</div>',
-                unsafe_allow_html=True,
-            )
-
-            rt1, rt2, rt3, rt4 = st.columns(4)
-            rt1.metric("Total Cases", f"{total_red_team}")
-            rt2.metric("Passed", f"{red_team_passed}")
-            rt3.metric("Failed", f"{red_team_failed}")
-            rt_pct = (red_team_passed / max(total_red_team, 1)) * 100
-            rt4.metric("Pass Rate", f"{rt_pct:.1f}%")
-
-            if not red_team_summary.empty:
-                render_section("Results by Run")
-                render_beige_board(
-                    "Red Team Runs",
-                    red_team_summary,
-                    subtitle="Pass rates across red team evaluation runs",
-                )
-
-            rt_display = red_team_df.copy()
-            if "PASS_FLAG" in rt_display.columns:
-                rt_display["RESULT"] = rt_display["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
-
-            run_opts = sorted(rt_display["RUN_ID"].unique().tolist()) if "RUN_ID" in rt_display.columns else []
-            if run_opts:
-                sel_run = st.multiselect("Filter by run", run_opts, default=run_opts, key="rt_run_flt")
-                filtered_rt = rt_display[rt_display["RUN_ID"].isin(sel_run)] if sel_run else rt_display
-            else:
-                filtered_rt = rt_display
-
-            render_beige_board(
-                "Red Team Case Details",
-                filtered_rt,
-                subtitle="Individual red team case outcomes with agent responses",
-            )
-
-            if red_team_failed == 0:
-                latest_run_df = red_team_df[red_team_df["RUN_ID"] == red_team_df["RUN_ID"].iloc[-1]] if not red_team_df.empty else red_team_df
-                latest_count = len(latest_run_df) if not latest_run_df.empty else 0
-                latest_id = latest_run_df["RUN_ID"].iloc[0] if not latest_run_df.empty else "—"
-                _rt_ok = f'<div class="success-box"> <strong>{total_red_team} red team case-runs across {red_team_runs} runs — all passed.</strong> Latest run ({_html.escape(str(latest_id))}): {latest_count}/{latest_count} PASS. Agent governance boundaries are holding. </div>'
-                st.markdown(_rt_ok, unsafe_allow_html=True)
-        else:
-            st.info("No red team results available.")
-
-    # ── Provenance Tests ─────────────────────────────────────────────────────
-    with eval_provenance:
-        render_section("Provenance Resolution Tests")
-
+    # ══════════════════════════════════════════════════════════════════════════
+    # PROVENANCE
+    # ══════════════════════════════════════════════════════════════════════════
+    with eval_prov_tab:
         if not provenance_tests_df.empty:
+            _pv1, _pv2 = st.columns(2)
+            _pv1.metric("Provenance Tests", f"{total_provenance_tests}")
+            if "EXPECTED_RESOLUTION" in provenance_tests_df.columns:
+                _pv2.metric("Resolution Strategies", f"{provenance_tests_df['EXPECTED_RESOLUTION'].nunique()}")
+
             st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-                'Tests verifying that the provenance resolver correctly identifies governed metrics '
-                'from agent-generated SQL and response text. Covers SQL expression matching, '
-                'column signature matching, and answer text fallback strategies.</div>',
+                '<div style="color:var(--text-2);font-size:0.82rem;margin-bottom:10px;">'
+                'Verifies the three-tier resolution strategy: SQL_EXPRESSION_MATCH, '
+                'COLUMN_SIGNATURE_MATCH, and ANSWER_TEXT_FALLBACK.</div>',
                 unsafe_allow_html=True,
             )
-
-            pt1, pt2 = st.columns(2)
-            pt1.metric("Total Provenance Tests", f"{total_provenance_tests}")
-            if "EXPECTED_RESOLUTION" in provenance_tests_df.columns:
-                res_counts = provenance_tests_df["EXPECTED_RESOLUTION"].value_counts()
-                pt2.metric("Resolution Strategies", f"{len(res_counts)}")
-
-            render_beige_board(
-                "Provenance Test Definitions",
-                provenance_tests_df,
-                subtitle="Test cases for metric resolution from agent SQL and response text",
-            )
-
-            _prov_ok = f'<div class="success-box"> <strong>{total_provenance_tests} provenance tests defined.</strong> These verify the three-tier resolution strategy: SQL_EXPRESSION_MATCH, COLUMN_SIGNATURE_MATCH, and ANSWER_TEXT_FALLBACK. </div>'
-            st.markdown(_prov_ok, unsafe_allow_html=True)
+            render_beige_board("Provenance Test Definitions", provenance_tests_df,
+                subtitle="Test cases for metric resolution from agent SQL and response text")
         else:
             st.info("No provenance test definitions available.")
 
-    # ── Agent Benchmarks ──────────────────────────────────────────────────────
-    with eval_bench:
-        render_section("Agent Benchmark Suite")
-
+    # ══════════════════════════════════════════════════════════════════════════
+    # AGENT BENCHMARKS
+    # ══════════════════════════════════════════════════════════════════════════
+    with eval_bench_tab:
         if not eval_bench_defs.empty:
-            st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-                'Active benchmark definitions — what the agent is tested against.</div>',
-                unsafe_allow_html=True,
-            )
-
-            if "CATEGORY" in eval_bench_defs.columns:
-                cat_opts = sorted(eval_bench_defs["CATEGORY"].dropna().unique().tolist())
-                sel_cat = st.multiselect("Filter by category", cat_opts, default=cat_opts, key="bench_cat_flt")
-                filtered_defs = eval_bench_defs[eval_bench_defs["CATEGORY"].isin(sel_cat)] if sel_cat else eval_bench_defs
-            else:
-                filtered_defs = eval_bench_defs
-
-            bd1, bd2 = st.columns(2)
-            bd1.metric("Active Benchmarks", f"{len(eval_bench_defs)}")
-            bd2.metric("Shown", f"{len(filtered_defs)}")
-
-            render_beige_board(
-                "Benchmark Definitions",
-                filtered_defs,
-                subtitle="Active test definitions with expected behavior",
-            )
+            render_beige_board("Benchmark Definitions", eval_bench_defs,
+                subtitle="Active test definitions with expected behavior")
         else:
             st.markdown(
                 '<div style="color:var(--text-2);font-size:0.85rem;">'
@@ -2583,80 +2507,36 @@ with eval_tab:
                 unsafe_allow_html=True,
             )
 
-        if not eval_bench_results.empty:
-            render_section("Benchmark Execution Results")
-
-            st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;margin-bottom:10px;">'
-                'Benchmark execution results.</div>',
-                unsafe_allow_html=True,
-            )
-
-            bench_display = eval_bench_results.copy()
-            if "PASS_FLAG" in bench_display.columns:
-                bench_display["RESULT"] = bench_display["PASS_FLAG"].map({True: "PASS", False: "FAIL"})
-                br_pf_opts = ["PASS", "FAIL"]
-                sel_br_pf = st.multiselect("Filter by result", br_pf_opts, default=br_pf_opts, key="bench_pf_flt")
-                filtered_br = bench_display[bench_display["RESULT"].isin(sel_br_pf)] if sel_br_pf else bench_display
-            else:
-                filtered_br = bench_display
-
-            if filtered_br.empty:
-                st.info("No test cases match the selected filter.")
-            br1, br2, br3 = st.columns(3)
-            br1.metric("Total Benchmark Results", f"{total_bench}")
-            br2.metric("Bench Passed", f"{bench_passed}")
-            bench_pct = (bench_passed / max(total_bench, 1)) * 100
-            br3.metric("Bench Pass Rate", f"{bench_pct:.1f}%")
-
-            render_beige_board(
-                "Benchmark Results",
-                filtered_br,
-                subtitle="Agent benchmark execution outcomes",
-            )
-
-            if bench_failed > 0:
-                failed_bench = bench_display[bench_display["RESULT"] == "FAIL"]
-                if not failed_bench.empty:
-                    _h31 = f'<div class="boundary"> <strong>{bench_failed} benchmark test(s) failed.</strong> Review the failing tests below. </div>'
-                    st.markdown(_h31, unsafe_allow_html=True)
-                    render_beige_board(
-                        "Failed Benchmarks",
-                        failed_bench,
-                        subtitle="Benchmark tests that did not pass — investigate for agent regressions",
-                    )
-        else:
-            st.info("No benchmark results available.")
-
-    # ── Test Details ──────────────────────────────────────────────────────────
-    with eval_detail:
-        render_section("Detailed Test Results")
-
+    # ══════════════════════════════════════════════════════════════════════════
+    # DETAILS
+    # ══════════════════════════════════════════════════════════════════════════
+    with eval_detail_tab:
         if not eval_smoke_results.empty:
-            with st.expander(f"View all smoke test details ({len(eval_smoke_results)})"):
-                render_beige_board(
-                    "Smoke Test Details",
-                    eval_smoke_results,
-                    subtitle="Complete smoke test results",
-                )
-        else:
-            st.info("No smoke test details available.")
-
+            with st.expander(f"Smoke test details ({len(eval_smoke_results)})"):
+                render_beige_board("Smoke Details", eval_smoke_results, subtitle="Complete smoke results")
         if not eval_bench_results.empty:
-            with st.expander(f"View benchmark details ({len(eval_bench_results)})"):
-                render_beige_board(
-                    "Benchmark Details",
-                    eval_bench_results,
-                    subtitle="Benchmark execution details",
-                )
-        else:
-            st.info("No benchmark details available.")
+            with st.expander(f"Benchmark details ({len(eval_bench_results)})"):
+                render_beige_board("Benchmark Details", eval_bench_results, subtitle="Benchmark execution details")
+        if not eval_smoke_summary.empty:
+            with st.expander("Smoke summary"):
+                render_beige_board("Smoke Summary", eval_smoke_summary, subtitle="Aggregated results")
 
-        # Test health summary
-        render_section("Test Health Summary")
-
-        _h32 = f'<div class="card card-severity-{"info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"}"> <div class="card-title">Overall Test Health</div> <div class="card-body"> <strong>{grand_total_tests}</strong> evaluation artifacts across smoke, red team, provenance, and governance registry.<br> Smoke: {smoke_passed}/{total_smoke} passed ({(smoke_passed / max(total_smoke, 1) * 100):.1f}%)<br> Red Team: {red_team_passed}/{total_red_team} case-runs across {red_team_runs} runs<br> Provenance: {total_provenance_tests} resolution tests<br> Registry: {_otd_var_count} OTD variants + {_readiness_count} readiness assessments<br><br> {"All systems nominal. Semantic layer and agent governance operating as expected." if pass_rate >= 95 else "Some tests require attention. Review failing tests for possible regressions." if pass_rate >= 80 else "Test suite degraded. Immediate investigation required."} </div> <div class="card-source">Source: EVALUATION schema &middot; Trust Contract</div> </div>'
-        st.markdown(_h32, unsafe_allow_html=True)
+        # Test health
+        _health_sev = "info" if pass_rate >= 95 else "warning" if pass_rate >= 80 else "critical"
+        _health_msg = "All systems nominal." if pass_rate >= 95 else "Some tests require attention." if pass_rate >= 80 else "Immediate investigation required."
+        st.markdown(
+            f'<div class="card card-severity-{_health_sev}" style="margin-top:10px;">'
+            f'<div class="card-title">Test Health</div>'
+            f'<div class="card-body">'
+            f'<strong>{_ev_exec}</strong> executable tests. '
+            f'Smoke: {smoke_passed}/{total_smoke}. '
+            f'Red Team: {red_team_passed}/{total_red_team} across {red_team_runs} runs. '
+            f'Provenance: {total_provenance_tests}. '
+            f'Registry: {_otd_var_count} OTD variants + {_readiness_count} readiness assessments.<br>'
+            f'{_health_msg}'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

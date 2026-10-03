@@ -1563,75 +1563,136 @@ with trends_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with analyst_tab:
 
-    # ── Analyst CSS ────────────────────────────────────────────────────────
+    # ── Analyst CSS with premium glow system ──────────────────────────────
     st.markdown("""<style>
-.an-header{margin-bottom:6px;}
+/* ── Analyst glow variables ── */
+:root {
+    --glow-primary: rgba(63,184,160,.35);
+    --glow-secondary: rgba(63,184,160,.18);
+    --glow-subtle: rgba(63,184,160,.08);
+}
+
+/* ── Analyst header ── */
+.an-header{margin-bottom:8px;position:relative;}
+.an-label{font-size:.58rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);text-shadow:0 0 12px var(--glow-secondary);margin-bottom:4px;}
 .an-title{font-size:1.35rem;font-weight:700;color:var(--text);letter-spacing:-.02em;margin:0 0 3px;}
 .an-subtitle{font-size:.82rem;color:var(--text-2);line-height:1.4;margin:0 0 2px;}
 .an-desc{font-size:.72rem;color:var(--muted);line-height:1.4;}
-.an-trust-strip{display:flex;gap:20px;flex-wrap:wrap;margin:8px 0 14px;font-size:.68rem;color:var(--muted);letter-spacing:.01em;}
+
+/* ── Composer glow ── */
+.an-composer-row [data-testid="stTextInput"] input {
+    background: var(--panel-2) !important;
+    border: 1px solid rgba(63,184,160,.3) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 0 12px var(--glow-subtle), 0 1px 3px rgba(0,0,0,.3) !important;
+    color: var(--text) !important;
+    padding: 10px 14px !important;
+    font-size: .88rem !important;
+    transition: box-shadow .2s, border-color .2s;
+}
+.an-composer-row [data-testid="stTextInput"] input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 20px var(--glow-primary), 0 0 40px var(--glow-subtle), 0 1px 4px rgba(0,0,0,.4) !important;
+    outline: none !important;
+}
+.an-composer-row [data-testid="stTextInput"] input::placeholder {
+    color: var(--muted) !important;
+    opacity: .7;
+}
+
+/* ── Trust strip ── */
+.an-trust-strip{display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 16px;font-size:.68rem;color:var(--muted);letter-spacing:.01em;}
 .an-trust-strip .an-ti{display:flex;align-items:center;gap:5px;}
-.an-trust-strip .an-tc{color:var(--accent);font-size:.72rem;font-weight:600;}
-.an-composer-wrap [data-testid="stForm"]{background:transparent !important;border:none !important;padding:0 !important;}
-.an-sg-label{font-size:.6rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:12px 0 5px;}
-.an-q{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:4px;padding:10px 14px;margin-bottom:8px;}
+.an-trust-strip .an-tc{color:var(--accent);font-size:.72rem;font-weight:600;text-shadow:0 0 6px var(--glow-subtle);}
+
+/* ── Suggestion chips ── */
+.an-sg-label{font-size:.58rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 5px;}
+
+/* ── Active tab glow ── */
+button[data-baseweb="tab"][aria-selected="true"] {
+    box-shadow: 0 2px 8px var(--glow-secondary) !important;
+}
+
+/* ── Question card ── */
+.an-q{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:4px;padding:10px 14px;margin-bottom:10px;}
 .an-q-label{font-size:.55rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;}
 .an-q-text{font-size:.85rem;color:var(--text);line-height:1.4;}
-.an-answer{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:8px;}
-.an-answer-label{font-size:.55rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;}
+
+/* ── Answer card with glow ── */
+.an-answer{background:var(--panel);border:1px solid rgba(63,184,160,.2);border-radius:8px;padding:16px 18px;margin-bottom:10px;box-shadow:0 0 16px var(--glow-subtle),0 1px 3px rgba(0,0,0,.2);}
+.an-answer-label{font-size:.55rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;text-shadow:0 0 8px var(--glow-subtle);}
 .an-answer-body{font-size:.88rem;color:var(--text-2);line-height:1.6;}
-.an-metric{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:6px;padding:12px 16px;margin-bottom:8px;}
-.an-metric-name{font-size:.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
-.an-metric-value{font-size:1.3rem;font-weight:700;color:var(--accent);margin-bottom:3px;}
+
+/* ── Governed metric card with subtle glow ── */
+.an-metric{background:var(--panel-2);border-left:3px solid var(--accent);border-radius:6px;padding:12px 16px;margin-bottom:10px;box-shadow:0 0 10px var(--glow-subtle);}
+.an-metric-name{font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
+.an-metric-value{font-size:1.3rem;font-weight:700;color:var(--accent);margin-bottom:3px;text-shadow:0 0 10px var(--glow-secondary);}
 .an-metric-meta{font-size:.72rem;color:var(--muted);line-height:1.5;}
-.an-trust-panel{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:.75rem;color:var(--text-2);line-height:1.6;}
+
+/* ── Trust panel ── */
+.an-trust-panel{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px;font-size:.75rem;color:var(--text-2);line-height:1.6;}
 .an-trust-panel strong{color:var(--text);}
-.an-refusal{background:var(--amber-soft);border:1px solid var(--amber);border-radius:6px;padding:12px 16px;margin-bottom:8px;}
+
+/* ── Refusal (amber, no teal glow) ── */
+.an-refusal{background:var(--amber-soft);border:1px solid var(--amber);border-radius:6px;padding:12px 16px;margin-bottom:10px;}
 .an-refusal-label{font-size:.58rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;}
 .an-refusal-body{font-size:.82rem;color:var(--text-2);line-height:1.5;}
 .an-refusal-body strong{color:var(--text);}
+
+/* ── Subtle background radial glow behind composer ── */
+.an-workspace{position:relative;}
+.an-workspace::before{content:"";position:absolute;top:40px;left:50%;transform:translateX(-50%);width:70%;height:120px;background:radial-gradient(ellipse,var(--glow-subtle) 0%,transparent 70%);pointer-events:none;z-index:0;}
 </style>""", unsafe_allow_html=True)
 
     # ── State management ──────────────────────────────────────────────────
-    _VER = "v6-analyst"
+    _VER = "v7-analyst"
     if st.session_state.get("_analyst_ver") != _VER:
         st.session_state["_analyst_ver"] = _VER
         st.session_state["cur_q"] = ""
         st.session_state["cur_a"] = ""
         st.session_state["cur_prov"] = None
-    for k, d in [("cur_q", ""), ("cur_a", ""), ("cur_prov", None), ("preset_q", "")]:
+    for k, d in [("cur_q", ""), ("cur_a", ""), ("cur_prov", None), ("preset_q", ""), ("_exec_pending", False)]:
         if k not in st.session_state:
             st.session_state[k] = d
 
+    # ── on_change callback for Enter-to-submit ────────────────────────────
+    def _on_analyst_input_change():
+        _val = st.session_state.get("analyst_input", "").strip()
+        if _val:
+            st.session_state["_exec_pending"] = True
+
     # ── Compact editorial header ──────────────────────────────────────────
+    st.markdown('<div class="an-workspace">', unsafe_allow_html=True)
     st.markdown(
         '<div class="an-header">'
-        '<div class="an-title">SupplyChainIQ Analyst</div>'
+        '<div class="an-label">SupplyChainIQ</div>'
+        '<div class="an-title">Analyst</div>'
         '<div class="an-subtitle">Governed conversational intelligence for supply-chain decisions.</div>'
         '<div class="an-desc">Ask across governed metrics, source boundaries and data readiness.</div>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Composer (st.form for Enter-to-submit) ────────────────────────────
+    # ── Composer (NO form — text_input with on_change for Enter) ──────────
     _pending_preset = st.session_state.get("preset_q", "")
     if _pending_preset:
         st.session_state["analyst_input"] = _pending_preset
         st.session_state["preset_q"] = ""
 
-    st.markdown('<div class="an-composer-wrap">', unsafe_allow_html=True)
-    with st.form("analyst_form", clear_on_submit=False):
-        _fc_input, _fc_btn = st.columns([9, 1])
-        with _fc_input:
-            user_input = st.text_input(
-                "Query",
-                placeholder="Ask a supply-chain question...",
-                key="analyst_input",
-                label_visibility="collapsed",
-            )
-        with _fc_btn:
-            submitted = st.form_submit_button("Ask", type="primary")
+    st.markdown('<div class="an-composer-row">', unsafe_allow_html=True)
+    _cc_input, _cc_btn = st.columns([9, 1])
+    with _cc_input:
+        user_input = st.text_input(
+            "Query",
+            placeholder="Ask a supply-chain question...",
+            key="analyst_input",
+            label_visibility="collapsed",
+            on_change=_on_analyst_input_change,
+        )
+    with _cc_btn:
+        ask_clicked = st.button("Ask", type="primary", key="analyst_ask_btn", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)  # close an-workspace
 
     # ── Trust strip ───────────────────────────────────────────────────────
     st.markdown(
@@ -1644,7 +1705,7 @@ with analyst_tab:
         unsafe_allow_html=True,
     )
 
-    # ── Suggestion chips (outside form, fill-only) ────────────────────────
+    # ── Suggestion chips (fill-only, outside form) ────────────────────────
     if not st.session_state.cur_q:
         _presets = {
             "Governed Metrics": [
@@ -1668,15 +1729,21 @@ with analyst_tab:
                     if st.button(_pq, key=f"preset_{_pi}_{_grp_label}", use_container_width=True):
                         st.session_state["preset_q"] = _pq
 
-    # ── Submit handler + agent execution (single path) ────────────────────
+    # ── Single execution path (Enter via on_change OR Ask button) ─────────
     _do_exec = False
-    if submitted and user_input and user_input.strip():
-        st.session_state.cur_q = user_input.strip()
-        st.session_state.cur_a = ""
-        st.session_state.cur_prov = None
+    _q_val = (user_input or "").strip()
+
+    if ask_clicked and _q_val:
+        _do_exec = True
+    elif st.session_state.get("_exec_pending") and _q_val:
         _do_exec = True
 
-    if _do_exec and st.session_state.cur_q:
+    st.session_state["_exec_pending"] = False
+
+    if _do_exec and _q_val:
+        st.session_state.cur_q = _q_val
+        st.session_state.cur_a = ""
+        st.session_state.cur_prov = None
         with st.spinner("Analyzing supply chain: resolving governed metric and source..."):
             try:
                 req_body = _json.dumps({"messages": [{"role": "user", "content": [{"type": "text", "text": st.session_state.cur_q}]}]})

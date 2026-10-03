@@ -262,8 +262,8 @@ button:focus-visible { outline-color: var(--accent) !important; box-shadow: 0 0 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ── Tabs ─────────────────────────────────────────────────────────── */
-button[data-baseweb="tab"] { background: var(--panel) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; font-size: 0.68rem !important; font-weight: 600 !important; letter-spacing: 0.06em !important; text-transform: uppercase !important; padding: 8px 14px !important; margin-right: 2px !important; }
-button[data-baseweb="tab"][aria-selected="true"] { background: var(--accent-soft) !important; color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; font-weight: 700 !important; }
+button[data-baseweb="tab"] { background: var(--panel) !important; color: #A9B4BE !important; border: 1px solid var(--border) !important; border-radius: 6px 6px 0 0 !important; font-size: 0.7rem !important; font-weight: 700 !important; letter-spacing: 0.04em !important; text-transform: uppercase !important; padding: 8px 10px !important; margin-right: 2px !important; }
+button[data-baseweb="tab"][aria-selected="true"] { background: var(--accent-soft) !important; color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; font-weight: 700 !important; box-shadow: 0 2px 8px rgba(63,184,160,.18) !important; }
 div[data-baseweb="tab-highlight"] { display: none !important; }
 div[data-baseweb="tab-border"] { display: none !important; }
 .stTabs [data-baseweb="tab-list"] { gap: 0 !important; }

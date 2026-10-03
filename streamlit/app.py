@@ -2481,8 +2481,8 @@ with eval_tab:
     )
 
     # ── Sub-tabs (no Red Team — lives in Trust) ──────────────────────────────
-    eval_overview, eval_smoke_tab, eval_prov_tab, eval_bench_tab, eval_detail_tab = st.tabs([
-        "Overview", "Smoke Tests", "Provenance", "Agent Benchmarks", "Details"
+    eval_overview, eval_smoke_tab, eval_prov_tab, eval_detail_tab = st.tabs([
+        "Overview", "Smoke Tests", "Provenance", "Details"
     ])
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -2572,20 +2572,6 @@ with eval_tab:
                 subtitle="Test cases for metric resolution from agent SQL and response text")
         else:
             st.info("No provenance test definitions available.")
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # AGENT BENCHMARKS
-    # ══════════════════════════════════════════════════════════════════════════
-    with eval_bench_tab:
-        if not eval_bench_defs.empty:
-            render_beige_board("Benchmark Definitions", eval_bench_defs,
-                subtitle="Active test definitions with expected behavior")
-        else:
-            st.markdown(
-                '<div style="color:var(--text-2);font-size:0.85rem;">'
-                'Agent benchmark definitions are covered by the Red Team suite.</div>',
-                unsafe_allow_html=True,
-            )
 
     # ══════════════════════════════════════════════════════════════════════════
     # DETAILS

@@ -1338,120 +1338,222 @@ with supplier_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with trends_tab:
 
-    _h14 = '<div class="hero"> <div class="hero-title">Trend Analysis</div> <div class="hero-copy"> Monthly operational trends across delivery performance, commercial metrics, and logistics cost dynamics. Source-attributed and time-aligned. </div> </div>'
-    st.markdown(_h14, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Trends</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Time-series view of delivery, commercial and logistics performance.</div>',
+        unsafe_allow_html=True,
+    )
 
     sub_del_trend, sub_com_trend, sub_log_trend = st.tabs([
-        "DataCo Delivery", "DataCo Commercial", "SCMS Logistics"
+        "Delivery \u2014 DataCo", "Commercial \u2014 DataCo", "Logistics \u2014 SCMS"
     ])
 
-    # ── DataCo Delivery Trends ────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # DELIVERY
+    # ══════════════════════════════════════════════════════════════════════════
     with sub_del_trend:
-        render_section("Monthly Delivery Trends", chip="DataCo")
+        if not monthly_del_df.empty and "MONTH_START" in monthly_del_df.columns:
+            import pandas as _pd_t
+            _del_sorted = monthly_del_df.sort_values("MONTH_START").copy()
+            _del_sorted["MONTH_START"] = _pd_t.to_datetime(_del_sorted["MONTH_START"])
+            _del_first = _del_sorted["MONTH_START"].iloc[0].strftime("%b %Y")
+            _del_last = _del_sorted["MONTH_START"].iloc[-1].strftime("%b %Y")
+            _del_latest = _del_sorted.iloc[-1]
 
-        if not monthly_del_df.empty:
-            td1, td2, td3 = st.columns(3)
-            td1.metric("Months Covered", f"{len(monthly_del_df)}")
-            if "ON_TIME_DELIVERY_PCT" in monthly_del_df.columns:
-                avg_otd = as_float(monthly_del_df["ON_TIME_DELIVERY_PCT"].mean())
-                td2.metric("Avg Monthly OTD", f"{avg_otd:.1f}%")
-            if "DELAY_RATE_PCT" in monthly_del_df.columns:
-                avg_delay_m = as_float(monthly_del_df["DELAY_RATE_PCT"].mean())
-                td3.metric("Avg Monthly Delay", f"{avg_delay_m:.1f}%")
+            # Primary chart: OTD + Delay Rate
+            try:
+                import altair as alt
+                _dm = _del_sorted[["MONTH_START", "ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]].melt("MONTH_START", var_name="Metric", value_name="Pct")
+                _dcs = alt.Scale(domain=["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"], range=["#3FB8A0", "#D9A441"])
+                _dch = alt.Chart(_dm).mark_line(strokeWidth=2).encode(
+                    x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                    y=alt.Y("Pct:Q", title="%", scale=alt.Scale(domain=[0, 100])),
+                    color=alt.Color("Metric:N", scale=_dcs, legend=alt.Legend(title=None, orient="top")),
+                    tooltip=["MONTH_START:T", "Metric:N", alt.Tooltip("Pct:Q", format=".1f")],
+                ).properties(height=260)
+                _dref = alt.Chart({"values": [{"y": otd}]}).mark_rule(strokeDash=[4, 4], color="#3FB8A0", opacity=0.4).encode(y="y:Q")
+                st.altair_chart(_dch + _dref, use_container_width=True)
+            except Exception:
+                st.line_chart(_del_sorted.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=260)
 
-            st.markdown('<div class="graph-board"><div class="graph-label">On-Time Delivery % and Delay Rate %</div></div>', unsafe_allow_html=True)
-            st.line_chart(monthly_del_df.set_index("MONTH_START")[["ON_TIME_DELIVERY_PCT", "DELAY_RATE_PCT"]], height=320)
+            # Three latest stats
+            _ls1, _ls2, _ls3 = st.columns(3)
+            _ls1.metric("Latest OTD", f"{as_float(_del_latest.get('ON_TIME_DELIVERY_PCT', 0)):.1f}%", delta=None)
+            _ls2.metric("Latest Delay Rate", f"{as_float(_del_latest.get('DELAY_RATE_PCT', 0)):.1f}%")
+            _ls3.metric("Avg Delay", f"{as_float(_del_latest.get('AVG_DELIVERY_DELAY_DAYS', 0)):.2f} days")
+            st.markdown(f'<div style="font-size:0.68rem;color:var(--muted);margin:-6px 0 12px;">DataCo coverage: {_del_first} \u2013 {_del_last} ({len(_del_sorted)} months). Latest period: {_del_last}.</div>', unsafe_allow_html=True)
 
-            if "ORDER_ITEM_COUNT" in monthly_del_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Monthly Order Item Count</div></div>', unsafe_allow_html=True)
-                st.bar_chart(monthly_del_df.set_index("MONTH_START")[["ORDER_ITEM_COUNT"]], height=260)
+            # Secondary analysis expander
+            with st.expander("Additional delivery trends"):
+                if "AVG_DELIVERY_DELAY_DAYS" in _del_sorted.columns:
+                    try:
+                        import altair as alt
+                        _dly = alt.Chart(_del_sorted).mark_line(strokeWidth=2, color="#3FB8A0").encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("AVG_DELIVERY_DELAY_DAYS:Q", title="Avg Delay (days)"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("AVG_DELIVERY_DELAY_DAYS:Q", format=".2f")],
+                        ).properties(height=200)
+                        st.altair_chart(_dly, use_container_width=True)
+                    except Exception:
+                        st.line_chart(_del_sorted.set_index("MONTH_START")[["AVG_DELIVERY_DELAY_DAYS"]], height=200)
+                if "ORDER_ITEM_COUNT" in _del_sorted.columns:
+                    try:
+                        import altair as alt
+                        _dvol = alt.Chart(_del_sorted).mark_bar(color="#3FB8A0", opacity=0.7).encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("ORDER_ITEM_COUNT:Q", title="Order Items"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("ORDER_ITEM_COUNT:Q", format=",")],
+                        ).properties(height=200)
+                        st.altair_chart(_dvol, use_container_width=True)
+                    except Exception:
+                        st.bar_chart(_del_sorted.set_index("MONTH_START")[["ORDER_ITEM_COUNT"]], height=200)
 
-            if "AVG_DELIVERY_DELAY_DAYS" in monthly_del_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Average Delivery Delay (Days)</div></div>', unsafe_allow_html=True)
-                st.line_chart(monthly_del_df.set_index("MONTH_START")[["AVG_DELIVERY_DELAY_DAYS"]], height=260)
-
-            with st.expander(f"View delivery trend data ({len(monthly_del_df)} months)"):
-                render_beige_board(
-                    "Delivery Trend Data",
-                    monthly_del_df,
-                    subtitle="Monthly delivery metrics — DataCo source",
-                )
+            # Monthly data expander (latest 24)
+            _del_latest24 = _del_sorted.sort_values("MONTH_START", ascending=False).head(24).sort_values("MONTH_START")
+            with st.expander(f"View monthly delivery data ({len(_del_latest24)} months)"):
+                render_beige_board("Monthly Delivery", _del_latest24,
+                    columns={"MONTH_START": "Month", "ON_TIME_DELIVERY_PCT": "OTD %", "DELAY_RATE_PCT": "Delay %",
+                             "AVG_DELIVERY_DELAY_DAYS": "Avg Delay", "ORDER_ITEM_COUNT": "Order Items"},
+                    formats={"ON_TIME_DELIVERY_PCT": fmt_pct, "DELAY_RATE_PCT": fmt_pct})
         else:
             st.info("No delivery trend data available.")
 
-    # ── DataCo Commercial Trends ──────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # COMMERCIAL
+    # ══════════════════════════════════════════════════════════════════════════
     with sub_com_trend:
-        render_section("Monthly Commercial Trends", chip="DataCo")
+        if not monthly_del_df.empty and "TOTAL_SALES" in monthly_del_df.columns:
+            import pandas as _pd_tc
+            _com_sorted = monthly_del_df.sort_values("MONTH_START").copy()
+            _com_sorted["MONTH_START"] = _pd_tc.to_datetime(_com_sorted["MONTH_START"])
+            _com_first = _com_sorted["MONTH_START"].iloc[0].strftime("%b %Y")
+            _com_last = _com_sorted["MONTH_START"].iloc[-1].strftime("%b %Y")
+            _com_latest = _com_sorted.iloc[-1]
 
-        if not monthly_del_df.empty:
-            tc1, tc2, tc3 = st.columns(3)
-            if "TOTAL_SALES" in monthly_del_df.columns:
-                avg_monthly_sales = as_float(monthly_del_df["TOTAL_SALES"].mean())
-                tc1.metric("Avg Monthly Sales", fmt_usd(avg_monthly_sales))
-            if "TOTAL_PROFIT" in monthly_del_df.columns:
-                avg_monthly_profit = as_float(monthly_del_df["TOTAL_PROFIT"].mean())
-                tc2.metric("Avg Monthly Profit", fmt_usd(avg_monthly_profit))
-            if "PROFIT_MARGIN_PCT" in monthly_del_df.columns:
-                avg_margin = as_float(monthly_del_df["PROFIT_MARGIN_PCT"].mean())
-                tc3.metric("Avg Monthly Margin", f"{avg_margin:.1f}%")
+            # Primary chart: Monthly Sales bars
+            try:
+                import altair as alt
+                _sch = alt.Chart(_com_sorted).mark_bar(color="#3FB8A0", opacity=0.8).encode(
+                    x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                    y=alt.Y("TOTAL_SALES:Q", title="Sales ($)"),
+                    tooltip=["MONTH_START:T", alt.Tooltip("TOTAL_SALES:Q", format="$,.0f"),
+                             alt.Tooltip("TOTAL_PROFIT:Q", format="$,.0f"),
+                             alt.Tooltip("PROFIT_MARGIN_PCT:Q", format=".1f")],
+                ).properties(height=260)
+                st.altair_chart(_sch, use_container_width=True)
+            except Exception:
+                st.bar_chart(_com_sorted.set_index("MONTH_START")[["TOTAL_SALES"]], height=260)
 
-            if "TOTAL_SALES" in monthly_del_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Monthly Sales</div></div>', unsafe_allow_html=True)
-                st.bar_chart(monthly_del_df.set_index("MONTH_START")[["TOTAL_SALES"]], height=280)
+            _cs1, _cs2, _cs3 = st.columns(3)
+            _cs1.metric("Latest Sales", fmt_usd(as_float(_com_latest.get("TOTAL_SALES", 0))))
+            _cs2.metric("Latest Profit", fmt_usd(as_float(_com_latest.get("TOTAL_PROFIT", 0))))
+            _cs3.metric("Latest Margin", f"{as_float(_com_latest.get('PROFIT_MARGIN_PCT', 0)):.1f}%")
+            st.markdown(f'<div style="font-size:0.68rem;color:var(--muted);margin:-6px 0 12px;">DataCo coverage: {_com_first} \u2013 {_com_last}. Latest period: {_com_last}.</div>', unsafe_allow_html=True)
 
-            if "TOTAL_PROFIT" in monthly_del_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Monthly Profit</div></div>', unsafe_allow_html=True)
-                st.bar_chart(monthly_del_df.set_index("MONTH_START")[["TOTAL_PROFIT"]], height=280)
+            with st.expander("Additional commercial trends"):
+                if "TOTAL_PROFIT" in _com_sorted.columns:
+                    try:
+                        import altair as alt
+                        _pch = alt.Chart(_com_sorted).mark_bar(color="#3FB8A0", opacity=0.7).encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("TOTAL_PROFIT:Q", title="Profit ($)"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("TOTAL_PROFIT:Q", format="$,.0f")],
+                        ).properties(height=200)
+                        st.altair_chart(_pch, use_container_width=True)
+                    except Exception:
+                        st.bar_chart(_com_sorted.set_index("MONTH_START")[["TOTAL_PROFIT"]], height=200)
+                if "PROFIT_MARGIN_PCT" in _com_sorted.columns:
+                    try:
+                        import altair as alt
+                        _mch = alt.Chart(_com_sorted).mark_line(strokeWidth=2, color="#D9A441").encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("PROFIT_MARGIN_PCT:Q", title="Margin %"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("PROFIT_MARGIN_PCT:Q", format=".1f")],
+                        ).properties(height=200)
+                        st.altair_chart(_mch, use_container_width=True)
+                    except Exception:
+                        st.line_chart(_com_sorted.set_index("MONTH_START")[["PROFIT_MARGIN_PCT"]], height=200)
 
-            if "PROFIT_MARGIN_PCT" in monthly_del_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Monthly Profit Margin %</div></div>', unsafe_allow_html=True)
-                st.line_chart(monthly_del_df.set_index("MONTH_START")[["PROFIT_MARGIN_PCT"]], height=260)
-
-            with st.expander(f"View commercial trend data ({len(monthly_del_df)} months)"):
-                render_beige_board(
-                    "Commercial Trend Data",
-                    monthly_del_df,
-                    subtitle="Monthly commercial metrics — DataCo source",
-                )
+            _com_latest24 = _com_sorted.sort_values("MONTH_START", ascending=False).head(24).sort_values("MONTH_START")
+            with st.expander(f"View monthly commercial data ({len(_com_latest24)} months)"):
+                render_beige_board("Monthly Commercial", _com_latest24,
+                    columns={"MONTH_START": "Month", "TOTAL_SALES": "Sales", "TOTAL_PROFIT": "Profit", "PROFIT_MARGIN_PCT": "Margin %"},
+                    formats={"TOTAL_SALES": fmt_usd, "TOTAL_PROFIT": fmt_usd, "PROFIT_MARGIN_PCT": fmt_pct})
         else:
             st.info("No commercial trend data available.")
 
-    # ── SCMS Logistics Trends ─────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # LOGISTICS
+    # ══════════════════════════════════════════════════════════════════════════
     with sub_log_trend:
-        render_section("Monthly Logistics Trends", chip="SCMS")
+        if not monthly_log_df.empty and "MONTH_START" in monthly_log_df.columns:
+            import pandas as _pd_tl
+            _log_sorted = monthly_log_df.sort_values("MONTH_START").copy()
+            _log_sorted["MONTH_START"] = _pd_tl.to_datetime(_log_sorted["MONTH_START"])
+            _log_first = _log_sorted["MONTH_START"].iloc[0].strftime("%b %Y")
+            _log_last = _log_sorted["MONTH_START"].iloc[-1].strftime("%b %Y")
+            _log_latest = _log_sorted.iloc[-1]
 
-        if not monthly_log_df.empty:
-            tl1, tl2, tl3 = st.columns(3)
-            tl1.metric("Months Covered", f"{len(monthly_log_df)}")
-            if "FREIGHT_COST_USD" in monthly_log_df.columns:
-                avg_freight_m = as_float(monthly_log_df["FREIGHT_COST_USD"].mean())
-                tl2.metric("Avg Monthly Freight", fmt_usd(avg_freight_m))
-            if "LOGISTICS_COST_RATE_PCT" in monthly_log_df.columns:
-                avg_log_rate_m = as_float(monthly_log_df["LOGISTICS_COST_RATE_PCT"].mean())
-                tl3.metric("Avg Monthly Log Rate", f"{avg_log_rate_m:.1f}%")
+            # Primary chart: Monthly Shipment Value bars
+            try:
+                import altair as alt
+                _lvch = alt.Chart(_log_sorted).mark_bar(color="#3FB8A0", opacity=0.8).encode(
+                    x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                    y=alt.Y("SHIPMENT_VALUE_USD:Q", title="Shipment Value ($)"),
+                    tooltip=["MONTH_START:T", alt.Tooltip("SHIPMENT_VALUE_USD:Q", format="$,.0f"),
+                             alt.Tooltip("FREIGHT_COST_USD:Q", format="$,.0f"),
+                             alt.Tooltip("LOGISTICS_COST_RATE_PCT:Q", format=".2f")],
+                ).properties(height=260)
+                st.altair_chart(_lvch, use_container_width=True)
+            except Exception:
+                st.bar_chart(_log_sorted.set_index("MONTH_START")[["SHIPMENT_VALUE_USD"]], height=260)
 
-            if "FREIGHT_COST_USD" in monthly_log_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Freight Cost (USD)</div></div>', unsafe_allow_html=True)
-                st.line_chart(monthly_log_df.set_index("MONTH_START")[["FREIGHT_COST_USD"]], height=300)
+            _ll1, _ll2, _ll3 = st.columns(3)
+            _ll1.metric("Latest Shipment Value", fmt_usd(as_float(_log_latest.get("SHIPMENT_VALUE_USD", 0))))
+            _ll2.metric("Latest Freight Cost", fmt_usd(as_float(_log_latest.get("FREIGHT_COST_USD", 0))))
+            _log_latest_rate = as_float(_log_latest.get("LOGISTICS_COST_RATE_PCT", 0))
+            _ll3.metric("Latest Logistics Rate", f"{_log_latest_rate:.2f}%" if _log_latest_rate > 0 else "\u2014")
+            st.markdown(
+                f'<div style="font-size:0.68rem;color:var(--muted);margin:-6px 0 4px;">SCMS coverage: {_log_first} \u2013 {_log_last} ({len(_log_sorted)} months). Latest period: {_log_last}.</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div class="boundary" style="font-size:0.75rem;padding:8px 12px;">'
+                f'Freight-cost trends are lower bounds because freight is null for {null_freight_pct:.0f}% of shipment lines.</div>',
+                unsafe_allow_html=True,
+            )
 
-            if "LOGISTICS_COST_RATE_PCT" in monthly_log_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Logistics Cost Rate %</div></div>', unsafe_allow_html=True)
-                st.line_chart(monthly_log_df.set_index("MONTH_START")[["LOGISTICS_COST_RATE_PCT"]], height=260)
+            with st.expander("Additional logistics trends"):
+                if "FREIGHT_COST_USD" in _log_sorted.columns:
+                    try:
+                        import altair as alt
+                        _fch = alt.Chart(_log_sorted).mark_line(strokeWidth=2, color="#D9A441").encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("FREIGHT_COST_USD:Q", title="Freight Cost ($)"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("FREIGHT_COST_USD:Q", format="$,.0f")],
+                        ).properties(height=200)
+                        st.altair_chart(_fch, use_container_width=True)
+                    except Exception:
+                        st.line_chart(_log_sorted.set_index("MONTH_START")[["FREIGHT_COST_USD"]], height=200)
+                if "LOGISTICS_COST_RATE_PCT" in _log_sorted.columns:
+                    try:
+                        import altair as alt
+                        _lrch = alt.Chart(_log_sorted.dropna(subset=["LOGISTICS_COST_RATE_PCT"])).mark_line(strokeWidth=2, color="#3FB8A0").encode(
+                            x=alt.X("MONTH_START:T", title=None, axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+                            y=alt.Y("LOGISTICS_COST_RATE_PCT:Q", title="Logistics Rate %"),
+                            tooltip=["MONTH_START:T", alt.Tooltip("LOGISTICS_COST_RATE_PCT:Q", format=".2f")],
+                        ).properties(height=200)
+                        st.altair_chart(_lrch, use_container_width=True)
+                    except Exception:
+                        st.line_chart(_log_sorted.set_index("MONTH_START")[["LOGISTICS_COST_RATE_PCT"]], height=200)
 
-            if "SHIPMENT_COUNT" in monthly_log_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Shipment Count</div></div>', unsafe_allow_html=True)
-                st.bar_chart(monthly_log_df.set_index("MONTH_START")[["SHIPMENT_COUNT"]], height=260)
-
-            if "SHIPMENT_VALUE_USD" in monthly_log_df.columns:
-                st.markdown('<div class="graph-board"><div class="graph-label">Shipment Value (USD)</div></div>', unsafe_allow_html=True)
-                st.bar_chart(monthly_log_df.set_index("MONTH_START")[["SHIPMENT_VALUE_USD"]], height=260)
-
-            with st.expander(f"View logistics trend data ({len(monthly_log_df)} months)"):
-                render_beige_board(
-                    "Logistics Trend Data",
-                    monthly_log_df,
-                    subtitle="Monthly logistics metrics — SCMS source",
-                )
+            _log_latest24 = _log_sorted.sort_values("MONTH_START", ascending=False).head(24).sort_values("MONTH_START")
+            with st.expander(f"View monthly logistics data ({len(_log_latest24)} months)"):
+                render_beige_board("Monthly Logistics", _log_latest24,
+                    columns={"MONTH_START": "Month", "SHIPMENT_VALUE_USD": "Shipment Value", "FREIGHT_COST_USD": "Freight",
+                             "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                    formats={"SHIPMENT_VALUE_USD": fmt_usd, "FREIGHT_COST_USD": fmt_usd, "LOGISTICS_COST_RATE_PCT": fmt_pct})
         else:
             st.info("No logistics trend data available.")
 

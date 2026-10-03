@@ -583,7 +583,7 @@ with st.sidebar:
         f'<span style="color:var(--muted);">({total_smoke} smoke, {total_red_team} red-team, {total_provenance_tests} provenance)</span><br>'
         f'<strong style="color:var(--accent);">{_otd_var_count}</strong> OTD variants &middot; '
         f'<strong style="color:var(--accent);">{_readiness_count}</strong> readiness assessments<br>'
-        f'<span style="color:var(--muted);">Smoke {pass_rate:.0f}% &middot; Red team {red_team_passed}/{total_red_team}</span>'
+        f'<span style="color:var(--muted);">Smoke {pass_rate:.0f}% &middot; Red team: {total_red_team} case-runs, {red_team_runs} runs, latest {_rt_latest_passed}/{_rt_latest_cases}</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1633,7 +1633,7 @@ with analyst_tab:
 }
 
 /* ── Trust strip ── */
-.an-trust-strip{display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 16px;font-size:.68rem;color:var(--muted);letter-spacing:.01em;}
+.an-trust-strip{display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 16px;font-size:.8rem;color:#A9B4BE;letter-spacing:.01em;}
 .an-trust-strip .an-ti{display:flex;align-items:center;gap:5px;}
 .an-trust-strip .an-tc{color:var(--accent);font-size:.72rem;font-weight:600;text-shadow:0 0 6px var(--glow-subtle);}
 
@@ -1722,7 +1722,7 @@ button[data-baseweb="tab"][aria-selected="true"] {
             on_change=_on_analyst_input_change,
         )
     with _cc_btn:
-        ask_clicked = st.button("Ask", type="primary", key="analyst_ask_btn", use_container_width=True)
+        ask_clicked = st.button("Ask \u2192", type="primary", key="analyst_ask_btn", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)  # close an-workspace
 

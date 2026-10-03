@@ -1,5 +1,7 @@
 # SupplyChainIQ
 
+[Live prototype](https://app.snowflake.com/streamlit/wrgmccw/oq37336/#/apps/e7zi2oo6jek3aun7gfpj) | Demo video: *link pending*
+
 SupplyChainIQ is a Snowflake-native governed supply-chain intelligence platform. It combines two independent supply-chain data sources, an explicit entity ontology with relationship governance, canonical metric definitions in a semantic layer, and a Cortex Agent that answers business questions while enforcing source boundaries, metric provenance, and deliberate refusal of unsupported relationships and non-computable metrics.
 
 Built for the **Snowflake CoCo CLI Hackathon -- GCC Edition**.
@@ -260,19 +262,6 @@ DataCo and SCMS remain separate source islands. Cross-source comparison is perfo
 - Valid country-level comparison = allowed; each source is aggregated independently before country alignment
 - Generated SQL for a valid country comparison does not trigger a Governance Boundary card
 - Governed analytical answers expose generated SQL, semantic model, metric definition, and data-quality context
-
-## Latest Prototype Updates
-
-- Question-aware metric refusal: DATA READINESS card targets the metric named in the question, not every metric mentioned in the Agent's answer
-- Governance boundary detection from question terms (DataCo + SCMS + join verb) and answer-text refusal language, independent of provenance resolver
-- SQL-generated guard prevents false-positive boundary cards on valid cross-source country-aggregate queries
-- SCMS-exclusion note rendered once per card group instead of per card
-- Red Team presentation uses chronological latest run (8/8 PASS from PHASE5_1_RERUN) with total history (16/16 across 3 runs)
-- Belize logistics rate resolved from dedicated query (311.05%, not 0%)
-- Supplier/site counts from authoritative dimension tables (73/88, not LIMIT 10)
-- Supplier concentration uses full SCMS shipment-value denominator (88.4%)
-- NULL logistics rates filtered from country and supplier cost-rate rankings
-- Certified metric readiness shows null coverage as a caveat, not a blocking reason
 
 ## Limitations
 

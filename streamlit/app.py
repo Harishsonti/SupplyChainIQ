@@ -372,6 +372,10 @@ def _load_all(_session):
     d["country_log"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY SHIPMENT_COUNT DESC LIMIT 15").to_pandas()
     d["country_log_rate"] = _session.sql("SELECT COUNTRY, LOGISTICS_COST_RATE_PCT, SHIPMENT_COUNT, FREIGHT_COST_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_LOGISTICS_SCORECARD ORDER BY LOGISTICS_COST_RATE_PCT DESC LIMIT 10").to_pandas()
     d["risk_high"] = _session.sql("SELECT COUNTRY, RISK_SIGNAL_COUNT, DELAY_RATE_PCT, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT WHERE RISK_TIER = 'HIGH' ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 10").to_pandas()
+    d["risk_counts"] = _session.sql("SELECT RISK_TIER, COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT GROUP BY RISK_TIER").to_pandas()
+    d["risk_medium"] = _session.sql("SELECT COUNTRY, RISK_SIGNAL_COUNT, DELAY_RATE_PCT, LOGISTICS_COST_RATE_PCT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_RISK_ASSESSMENT WHERE RISK_TIER = 'MEDIUM' ORDER BY RISK_SIGNAL_COUNT DESC LIMIT 50").to_pandas()
+    d["country_del_rank"] = _session.sql("SELECT COUNTRY, DELAY_RATE_PCT, ORDER_ITEM_COUNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD WHERE ORDER_ITEM_COUNT >= 50 ORDER BY DELAY_RATE_PCT DESC LIMIT 10").to_pandas()
+    d["country_del_below"] = _session.sql("SELECT COUNT(*) AS CNT FROM SUPPLYCHAINIQ_COCO.SEMANTIC.COUNTRY_DELIVERY_SCORECARD WHERE ORDER_ITEM_COUNT < 50").to_pandas()
     d["supplier_top5"] = _session.sql("SELECT SUPPLIER, SHIPMENT_VALUE_USD FROM SUPPLYCHAINIQ_COCO.SEMANTIC.SUPPLIER_SCORECARD ORDER BY SHIPMENT_VALUE_USD DESC LIMIT 5").to_pandas()
     d["geo"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.CORE.GEOGRAPHY_DIM ORDER BY SOURCE_COVERAGE, COUNTRY_NAME").to_pandas()
     d["otd_variants"] = _session.sql("SELECT * FROM SUPPLYCHAINIQ_COCO.EVALUATION.OTD_VARIANT_REGISTRY ORDER BY VARIANT_ID").to_pandas()
@@ -408,6 +412,10 @@ country_del_df = _data["country_del"]
 country_log_df = _data["country_log"]
 country_log_rate_df = _data["country_log_rate"]
 risk_high_df = _data["risk_high"]
+risk_counts_df = _data["risk_counts"]
+risk_medium_df = _data["risk_medium"]
+country_del_rank_df = _data["country_del_rank"]
+country_del_below_df = _data["country_del_below"]
 supplier_top5_df = _data["supplier_top5"]
 geo_df = _data["geo"]
 otd_variants_df = _data["otd_variants"]
@@ -438,10 +446,14 @@ logistics_rate = as_float(logistics_df.iloc[0]["LOGISTICS_COST_RATE_PCT"]) if no
 insurance_cost = as_float(logistics_df.iloc[0]["TOTAL_INSURANCE_COST"]) if not logistics_df.empty else 0
 null_freight_pct = as_float(logistics_df.iloc[0]["NULL_FREIGHT_PCT"]) if not logistics_df.empty else 0
 
-# Risk counts
-high_risk_count = len(risk_df[risk_df["RISK_TIER"] == "HIGH"]) if not risk_df.empty else 0
-medium_risk_count = len(risk_df[risk_df["RISK_TIER"] == "MEDIUM"]) if not risk_df.empty else 0
-low_risk_count = len(risk_df[risk_df["RISK_TIER"] == "LOW"]) if not risk_df.empty else 0
+# Risk counts (from full aggregate, not LIMIT 15)
+_rc_map = {}
+if not risk_counts_df.empty:
+    for _, _rcr in risk_counts_df.iterrows():
+        _rc_map[str(_rcr.get("RISK_TIER", ""))] = int(_rcr.get("CNT", 0))
+high_risk_count = _rc_map.get("HIGH", 0)
+medium_risk_count = _rc_map.get("MEDIUM", 0)
+low_risk_count = _rc_map.get("LOW", 0)
 
 # Geography counts
 geo_both = 0
@@ -952,95 +964,204 @@ with signals_tab:
 # ══════════════════════════════════════════════════════════════════════════════
 with country_tab:
 
-    _h10 = f'<div class="hero"> <div class="hero-title">Country Intelligence</div> <div class="hero-copy"> Cross-source analysis at the country-aggregate level — the only defensible cross-source join grain. Country is the shared dimension between DataCo and SCMS. </div> <div class="hero-kpis"> <div class="hero-kpi"> <div class="label">Total Countries</div> <div class="value">{len(geo_df)}</div> <div class="note">All sources</div> </div> <div class="hero-kpi"> <div class="label">Both Sources</div> <div class="value">{geo_both}</div> <div class="note">DataCo + SCMS</div> </div> <div class="hero-kpi"> <div class="label">High Risk</div> <div class="value">{high_risk_count}</div> <div class="note">countries</div> </div> <div class="hero-kpi"> <div class="label">DataCo Only</div> <div class="value">{geo_dataco_only}</div> <div class="note">countries</div> </div> </div> </div>'
-    st.markdown(_h10, unsafe_allow_html=True)
+    # ── Header ───────────────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:1.35rem;margin-bottom:2px;">Country Intel</div>'
+        '<div style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;">'
+        'Country-aggregate intelligence across DataCo delivery and SCMS logistics.</div>',
+        unsafe_allow_html=True,
+    )
 
-    sub_score, sub_risk, sub_cov = st.tabs(["Scorecards", "Risk Assessment", "Coverage"])
+    # ── KPI row (GEOGRAPHY_DIM = canonical 165 countries) ────────────────────
+    _ci_kpi = (
+        '<div class="enterprise-strip">'
+        f'<div class="es-item"><div class="es-label">Countries</div><div class="es-value">{len(geo_df)}</div><div class="es-caption">GEOGRAPHY_DIM</div></div>'
+        f'<div class="es-item"><div class="es-label">Both Sources</div><div class="es-value">{geo_both}</div><div class="es-caption" style="color:var(--accent);">DataCo + SCMS</div></div>'
+        f'<div class="es-item"><div class="es-label">DataCo Only</div><div class="es-value">{geo_dataco_only}</div><div class="es-caption">delivery data</div></div>'
+        f'<div class="es-item"><div class="es-label">SCMS Only</div><div class="es-value">{geo_scms_only}</div><div class="es-caption">logistics data</div></div>'
+        f'<div class="es-item"><div class="es-label">HIGH Risk</div><div class="es-value" style="color:var(--amber);">{high_risk_count}</div><div class="es-caption">countries</div></div>'
+        '</div>'
+    )
+    st.markdown(_ci_kpi, unsafe_allow_html=True)
 
-    # ── Scorecards ────────────────────────────────────────────────────────────
-    with sub_score:
-        render_section("Cross-Source Country Scorecard")
+    # ── Sub-tabs ─────────────────────────────────────────────────────────────
+    sub_cross, sub_risk, sub_cov = st.tabs(["Cross-source view", "Risk", "Coverage"])
 
-        if not country_df.empty:
-            _top_cs = country_df.head(15)
-            render_beige_board(
-                "Top 15 Countries by Cross-Source Activity",
-                _top_cs,
-                subtitle="DataCo: OTD, delay, sales, profit. SCMS: shipments, freight, logistics rate.",
+    # ══════════════════════════════════════════════════════════════════════════
+    # CROSS-SOURCE VIEW
+    # ══════════════════════════════════════════════════════════════════════════
+    with sub_cross:
+        _both_df = country_df[
+            (country_df["SOURCE_COVERAGE"] == "BOTH") &
+            (country_df["LOGISTICS_COST_RATE_PCT"].notna()) &
+            (country_df["DELAY_RATE_PCT"].notna())
+        ].copy() if not country_df.empty and "SOURCE_COVERAGE" in country_df.columns else None
+
+        if _both_df is not None and not _both_df.empty:
+            _med_delay = as_float(_both_df["DELAY_RATE_PCT"].median())
+            _med_logistics = as_float(_both_df["LOGISTICS_COST_RATE_PCT"].median())
+
+            # Scatter plot
+            _scatter_ok = False
+            try:
+                import altair as alt
+                _sdata = _both_df[["COUNTRY", "DELAY_RATE_PCT", "LOGISTICS_COST_RATE_PCT", "SHIPMENT_VALUE_USD"]].copy()
+                _sdata["SHIPMENT_VALUE_USD"] = _sdata["SHIPMENT_VALUE_USD"].fillna(0).astype(float)
+                _sdata["is_belize"] = _sdata["COUNTRY"].str.upper() == "BELIZE"
+                _y_max = min(as_float(_sdata["LOGISTICS_COST_RATE_PCT"].max()) * 1.1, 350)
+
+                _points = alt.Chart(_sdata).mark_circle(opacity=0.8).encode(
+                    x=alt.X("DELAY_RATE_PCT:Q", title="DataCo Delay Rate %", scale=alt.Scale(domain=[0, 105])),
+                    y=alt.Y("LOGISTICS_COST_RATE_PCT:Q", title="SCMS Logistics Cost Rate %",
+                            scale=alt.Scale(type="log" if _y_max > 50 else "linear")),
+                    size=alt.Size("SHIPMENT_VALUE_USD:Q", title="Shipment Value", scale=alt.Scale(range=[30, 400]), legend=None),
+                    color=alt.condition(alt.datum.is_belize, alt.value("#D9A441"), alt.value("#3FB8A0")),
+                    tooltip=["COUNTRY:N", alt.Tooltip("DELAY_RATE_PCT:Q", format=".1f"),
+                             alt.Tooltip("LOGISTICS_COST_RATE_PCT:Q", format=".1f"),
+                             alt.Tooltip("SHIPMENT_VALUE_USD:Q", format="$,.0f")],
+                ).properties(height=300, title="Cross-source: poor delivery + high logistics cost?")
+
+                _vline = alt.Chart({"values": [{"x": _med_delay}]}).mark_rule(
+                    strokeDash=[4, 4], color="#6B7782", opacity=0.6).encode(x="x:Q")
+                _hline = alt.Chart({"values": [{"y": _med_logistics}]}).mark_rule(
+                    strokeDash=[4, 4], color="#6B7782", opacity=0.6).encode(y="y:Q")
+
+                st.altair_chart(_points + _vline + _hline, use_container_width=True)
+                _scatter_ok = True
+            except Exception:
+                pass
+            if not _scatter_ok:
+                st.info("Scatter chart not available. See table below.")
+
+            st.markdown(
+                f'<div style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;">'
+                f'Country-aggregate comparison only. No row-level join between DataCo and SCMS. '
+                f'Quadrants use live medians: Delay {_med_delay:.1f}% \u00b7 Logistics {_med_logistics:.1f}%. '
+                f'{len(_both_df)} countries in both sources.</div>',
+                unsafe_allow_html=True,
             )
-            if len(country_df) > 15:
-                with st.expander(f"View all countries ({len(country_df)})"):
-                    render_beige_board("All Countries", country_df, subtitle="Full cross-source scorecard")
 
-        render_section("Top Countries — Delivery", chip="DataCo")
-
-        if not country_del_df.empty:
-            render_beige_board(
-                "Delivery by Country",
-                country_del_df,
-                subtitle=f"Top {len(country_del_df)} by order volume — DataCo source",
-            )
-
-        render_section("Top Countries — Logistics", chip="SCMS")
-
-        if not country_log_df.empty:
-            render_beige_board(
-                "Logistics by Country",
-                country_log_df,
-                subtitle=f"Top {len(country_log_df)} by shipment volume — SCMS source",
-            )
-
-    # ── Risk Assessment ───────────────────────────────────────────────────────
-    with sub_risk:
-        render_section("Country Risk Assessment")
-
-        if not risk_df.empty:
-            tier_opts = sorted(risk_df["RISK_TIER"].dropna().unique().tolist())
-            sel_tier = st.multiselect("Risk tier filter", tier_opts, default=tier_opts, key="risk_tier_flt")
-            filtered_risk = risk_df[risk_df["RISK_TIER"].isin(sel_tier)] if sel_tier else risk_df
-
-            r1, r2, r3, r4 = st.columns(4)
-            r1.metric("HIGH Risk", f"{high_risk_count} countries")
-            r2.metric("MEDIUM Risk", f"{medium_risk_count} countries")
-            r3.metric("LOW Risk", f"{low_risk_count} countries")
-            r4.metric("Total Assessed", f"{len(risk_df)} countries")
-
-            render_beige_board(
-                "Risk Assessment",
-                filtered_risk,
-                subtitle="Risk = 2+ signals above median (delay rate, logistics rate, freight cost). Belize is intentionally included — outlier policy prohibits silent exclusion.",
-            )
-
-            _h11 = '<div class="boundary"> <strong>Risk methodology:</strong> Countries are assessed based on deviation from median values across three dimensions: delay rate (DataCo), logistics cost rate (SCMS), and absolute freight cost (SCMS). A country is HIGH risk if 2+ signals exceed the median. The Belize outlier (311% logistics rate) is included per outlier-inclusion policy. </div>'
-            st.markdown(_h11, unsafe_allow_html=True)
+            # Upper-right quadrant table
+            _ur = _both_df[
+                (_both_df["DELAY_RATE_PCT"] > _med_delay) &
+                (_both_df["LOGISTICS_COST_RATE_PCT"] > _med_logistics)
+            ].sort_values("LOGISTICS_COST_RATE_PCT", ascending=False).head(10)
+            if not _ur.empty:
+                render_beige_board(
+                    f"Upper-right quadrant: high delay + high logistics ({len(_ur)})",
+                    _ur,
+                    columns={"COUNTRY": "Country", "DELAY_RATE_PCT": "Delay %",
+                             "LOGISTICS_COST_RATE_PCT": "Logistics Rate %",
+                             "SHIPMENT_COUNT": "Shipments", "ORDER_ITEM_COUNT": "Orders"},
+                    subtitle="Above both medians — requires investigation",
+                    formats={"DELAY_RATE_PCT": fmt_pct, "LOGISTICS_COST_RATE_PCT": fmt_pct},
+                    limit=10,
+                )
         else:
-            st.info("No risk assessment data available.")
+            st.info("No cross-source data available.")
 
-    # ── Coverage ──────────────────────────────────────────────────────────────
+        # ── Rankings row ─────────────────────────────────────────────────────
+        _rk_l, _rk_r = st.columns(2)
+        with _rk_l:
+            _below_thresh = int(country_del_below_df.iloc[0]["CNT"]) if not country_del_below_df.empty else 0
+            render_beige_board(
+                "Highest delay rate (DataCo, min 50 orders)",
+                country_del_rank_df,
+                columns={"COUNTRY": "Country", "DELAY_RATE_PCT": "Delay %", "ORDER_ITEM_COUNT": "Order Items"},
+                subtitle=f"Top 10. Minimum order-item threshold: 50. {_below_thresh} countries below threshold.",
+                formats={"DELAY_RATE_PCT": fmt_pct},
+            )
+        with _rk_r:
+            render_beige_board(
+                "Highest logistics cost rate (SCMS)",
+                country_log_rate_df,
+                columns={"COUNTRY": "Country", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %",
+                         "SHIPMENT_COUNT": "Shipments", "FREIGHT_COST_USD": "Freight"},
+                subtitle="Top 10 by rate — Belize included per policy",
+                formats={"LOGISTICS_COST_RATE_PCT": fmt_pct, "FREIGHT_COST_USD": fmt_usd},
+            )
+
+        # Scorecard expanders
+        if not country_df.empty:
+            with st.expander(f"View cross-source scorecard ({len(country_df)} countries)"):
+                render_beige_board("Cross-Source Scorecard", country_df, subtitle="All countries", limit=50)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RISK
+    # ══════════════════════════════════════════════════════════════════════════
+    with sub_risk:
+        # Tier summary badges
+        _risk_strip = (
+            '<div class="enterprise-strip" style="margin-bottom:12px;">'
+            f'<div class="es-item"><div class="es-label">HIGH</div><div class="es-value" style="color:var(--amber);">{high_risk_count}</div></div>'
+            f'<div class="es-item"><div class="es-label">MEDIUM</div><div class="es-value" style="color:var(--text-2);">{medium_risk_count}</div></div>'
+            f'<div class="es-item"><div class="es-label">LOW</div><div class="es-value" style="color:var(--accent);">{low_risk_count}</div></div>'
+            '</div>'
+        )
+        st.markdown(_risk_strip, unsafe_allow_html=True)
+
+        # HIGH-risk table
+        if not risk_high_df.empty:
+            render_beige_board(
+                "HIGH-risk countries",
+                risk_high_df,
+                columns={"COUNTRY": "Country", "RISK_SIGNAL_COUNT": "Risk Signals",
+                         "DELAY_RATE_PCT": "Delay %", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                subtitle=f"{len(risk_high_df)} countries with 2+ signals above median",
+                formats={"DELAY_RATE_PCT": fmt_pct, "LOGISTICS_COST_RATE_PCT": fmt_pct},
+            )
+
+        # MEDIUM-risk expander
+        if not risk_medium_df.empty:
+            with st.expander(f"View MEDIUM-risk countries ({len(risk_medium_df)})"):
+                render_beige_board(
+                    "MEDIUM-risk countries",
+                    risk_medium_df,
+                    columns={"COUNTRY": "Country", "RISK_SIGNAL_COUNT": "Risk Signals",
+                             "DELAY_RATE_PCT": "Delay %", "LOGISTICS_COST_RATE_PCT": "Logistics Rate %"},
+                    subtitle="1 signal above median",
+                    formats={"DELAY_RATE_PCT": fmt_pct, "LOGISTICS_COST_RATE_PCT": fmt_pct},
+                )
+
+        # Methodology
+        st.markdown(
+            '<div class="boundary" style="font-size:0.78rem;">'
+            '<strong>Risk methodology:</strong> Countries assessed against median thresholds across delay rate (DataCo), '
+            'logistics cost rate (SCMS), and freight cost (SCMS). HIGH = 2+ above median. '
+            'Belize (311% logistics rate) included per outlier policy.</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # COVERAGE
+    # ══════════════════════════════════════════════════════════════════════════
     with sub_cov:
-        render_section("Geographic Source Coverage")
+        # Coverage badges
+        _cov_strip = (
+            '<div class="enterprise-strip" style="margin-bottom:12px;">'
+            f'<div class="es-item"><div class="es-label">Both Sources</div><div class="es-value" style="color:var(--accent);">{geo_both}</div></div>'
+            f'<div class="es-item"><div class="es-label">DataCo Only</div><div class="es-value">{geo_dataco_only}</div></div>'
+            f'<div class="es-item"><div class="es-label">SCMS Only</div><div class="es-value">{geo_scms_only}</div></div>'
+            '</div>'
+        )
+        st.markdown(_cov_strip, unsafe_allow_html=True)
+
+        st.markdown(
+            '<div class="success-box" style="font-size:0.78rem;">'
+            '<strong>Coverage:</strong> "Both" countries have data from DataCo and SCMS, enabling cross-source aggregate comparison. '
+            'Single-source countries can only be analyzed within that source.</div>',
+            unsafe_allow_html=True,
+        )
 
         if not geo_df.empty:
-            gc1, gc2, gc3, gc4 = st.columns(4)
-            gc1.metric("Total Countries", len(geo_df))
-            gc2.metric("BOTH Sources", geo_both)
-            gc3.metric("DataCo Only", geo_dataco_only)
-            gc4.metric("SCMS Only", geo_scms_only)
-
-            cov_summary = geo_df.groupby("SOURCE_COVERAGE").size().reset_index(name="COUNT")
-            st.markdown('<div class="graph-board"><div class="graph-label">Countries by Source Coverage</div></div>', unsafe_allow_html=True)
-            st.bar_chart(cov_summary.set_index("SOURCE_COVERAGE"))
-
-            render_beige_board(
-                "Full Country List",
-                geo_df,
-                subtitle="All countries with source system coverage mapping",
-            )
-
-            _h12 = '''<div class="success-box"> <strong>Coverage note:</strong> Countries tagged "BOTH" have data from both DataCo and SCMS, enabling cross-source aggregate comparison. Countries with single-source coverage can only be analyzed within that source's metrics. </div>'''
-            st.markdown(_h12, unsafe_allow_html=True)
-        else:
-            st.info("No geography data available.")
+            with st.expander(f"View all countries ({len(geo_df)})"):
+                render_beige_board(
+                    "Country Coverage",
+                    geo_df,
+                    columns={"COUNTRY_NAME": "Country", "SOURCE_COVERAGE": "Coverage"} if "COUNTRY_NAME" in geo_df.columns else None,
+                    subtitle="GEOGRAPHY_DIM — canonical country list",
+                    limit=165,
+                )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

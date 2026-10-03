@@ -149,7 +149,7 @@ The Cortex Agent (`SUPPLYCHAINIQ_COCO_AGENT`) uses `cortex_analyst_text_to_sql` 
 | Suite | Count | Latest Result |
 |-------|-------|---------------|
 | Smoke / Regression | 50 | 50/50 PASS |
-| Red Team | 16 case-runs across 3 runs | 16/16 PASS |
+| Red Team | 16 case-runs across 3 runs; latest run 8/8 PASS | 16/16 PASS overall |
 | Provenance | 10 | 10 resolution test definitions |
 
 ### Governance Registry (19 entries, not executable tests)
@@ -240,6 +240,7 @@ The prototype is deployed as a Streamlit-in-Snowflake application using the `@SU
 - **No row-level cross-source join**: DataCo orders and SCMS shipments cannot be linked at the transaction level. Country-aggregate comparison is the only supported cross-source grain.
 - **Non-computable metrics**: Fill Rate, Days of Inventory, Inventory Turnover, Perfect Order Rate, Return Rate, and Landed Cost cannot be certified from available data.
 - **Freight null coverage**: SCMS freight cost is null for 39.97% of shipments. Freight-based metrics are computed from non-null rows and represent lower bounds.
+- **Country mapping coverage**: The cross-source scorecard contains 167 country labels versus 165 canonical countries in GEOGRAPHY_DIM because 2 SCMS country encoding variants are not yet matched by the canonical country mapping. The governed cross-source analysis uses the canonical mapping; this is a documented data-quality gap.
 - **Agent instruction adherence**: The red-team suite validates expected governance behavior, but natural-language interfaces cannot provide a mathematical guarantee that every possible query will produce the governed answer.
 - **Temporal mismatch**: DataCo covers 2015--2018; SCMS covers 2006--2015. Cross-source country comparisons span different time windows.
 
